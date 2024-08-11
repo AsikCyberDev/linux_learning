@@ -1,12 +1,15 @@
-
 # Day 1: Advanced Process Management
 
 ## 1. Process Creation and Termination Internals
 
 ### Fork() Internals
-- Copy-on-write (COW) mechanism
-- Page table duplication
-- File descriptor inheritance
+
+The `fork()` system call creates a new process by duplicating the calling process. Understanding its internals is crucial for efficient process management.
+
+Key Concepts:
+- Copy-on-Write (COW) mechanism: The kernel doesn't immediately copy all resources; instead, it marks pages as read-only and copies them only when modified.
+- Page table duplication: The kernel creates a new page table for the child process, initially pointing to the same physical pages as the parent.
+- File descriptor inheritance: The child inherits copies of the parent's file descriptors.
 
 Example:
 ```c
@@ -30,10 +33,19 @@ int main() {
 }
 ```
 
+Explanation:
+- `fork()` returns 0 in the child process and the child's PID in the parent process.
+- The child process gets a copy of the parent's memory space, but with its own unique PID.
+- The parent waits for the child to finish using `wait()` to avoid creating a zombie process.
+
 ### Exec() Family Internals
-- Memory space replacement
-- File descriptor preservation
-- Signal handling reset
+
+The `exec()` family of functions replaces the current process image with a new process image.
+
+Key Concepts:
+- Memory space replacement: The existing process image is replaced, but the process ID remains the same.
+- File descriptor preservation: Open file descriptors remain open across an exec call unless the close-on-exec flag is set.
+- Signal handling reset: Signal dispositions are reset to their default values, except for ignored signals.
 
 Example:
 ```c
@@ -48,10 +60,19 @@ int main() {
 }
 ```
 
+Explanation:
+- `execvp()` searches for the executable in the PATH and executes it with the given arguments.
+- If `execvp()` succeeds, it never returns. If it returns, an error occurred.
+- The process image is completely replaced, but the PID remains the same.
+
 ### Process Termination and Zombie Processes
-- Resource cleanup
-- Exit status preservation
-- Zombie state and reaping
+
+Understanding how processes terminate and how to handle zombie processes is crucial for proper resource management.
+
+Key Concepts:
+- Resource cleanup: The kernel releases most resources, but the parent must read the exit status.
+- Exit status preservation: The kernel keeps minimal information about the terminated process until the parent retrieves it.
+- Zombie state: A process that has terminated but whose exit status hasn't been read by its parent.
 
 Example:
 ```c
@@ -77,11 +98,22 @@ int main() {
 }
 ```
 
+Explanation:
+- The child process exits with status 42.
+- The parent sleeps for 2 seconds, during which the child becomes a zombie.
+- `waitpid()` retrieves the child's exit status, removing the zombie process.
+- `WIFEXITED` and `WEXITSTATUS` macros are used to check and extract the exit status.
+
 ## 2. Real-time Process Scheduling
 
+Real-time scheduling allows processes to meet strict timing requirements.
+
 ### SCHED_FIFO and SCHED_RR Policies
-- Priority-based preemptive scheduling
-- Time slice allocation in SCHED_RR
+
+Key Concepts:
+- SCHED_FIFO: First-In-First-Out scheduling without time slicing.
+- SCHED_RR: Round-Robin scheduling with time slicing for processes of equal priority.
+- Priority levels: Real-time priorities range from 1 to 99, with higher numbers indicating higher priority.
 
 Example:
 ```c
@@ -90,13 +122,17 @@ Example:
 #include <sched.h>
 
 void *thread_function(void *arg) {
+    int policy;
+    struct sched_param param;
+    pthread_getschedparam(pthread_self(), &policy, &param);
     printf("Thread running with policy: ");
-    switch(sched_getscheduler(0)) {
+    switch(policy) {
         case SCHED_FIFO:  printf("SCHED_FIFO\n"); break;
         case SCHED_RR:    printf("SCHED_RR\n"); break;
         case SCHED_OTHER: printf("SCHED_OTHER\n"); break;
         default:          printf("Unknown\n");
     }
+    printf("Priority: %d\n", param.sched_priority);
     return NULL;
 }
 
@@ -117,9 +153,16 @@ int main() {
 }
 ```
 
+Explanation:
+- We set the scheduling policy to SCHED_FIFO and the priority to the maximum allowed.
+- The thread reports its scheduling policy and priority.
+- Note: Running this program may require root privileges or CAP_SYS_NICE capability.
+
 ### Changing Process Priorities
-- nice() and setpriority() system calls
-- Real-time priorities vs. nice values
+
+Key Concepts:
+- nice values: Range from -20 (highest priority) to 19 (lowest priority).
+- Real-time priorities: Separate from nice values, used for SCHED_FIFO and SCHED_RR.
 
 Example:
 ```c
@@ -140,11 +183,21 @@ int main() {
 }
 ```
 
+Explanation:
+- `getpriority()` retrieves the current nice value.
+- `nice()` changes the nice value, effectively changing the process priority.
+- Positive nice values decrease priority, negative values increase it (requires privileges).
+
 ## 3. Resource Limits and Control Groups
 
 ### Setting Resource Limits
-- Using setrlimit() to set process limits
-- Common limits: CPU time, file size, number of processes
+
+Resource limits allow controlling the resources a process can consume.
+
+Key Concepts:
+- Soft limits: Can be increased by the process up to the hard limit.
+- Hard limits: Can only be increased by privileged processes.
+- Common limits: CPU time, file size, number of open file descriptors, etc.
 
 Example:
 ```c
@@ -170,9 +223,19 @@ int main() {
 }
 ```
 
+Explanation:
+- `getrlimit()` retrieves the current resource limits.
+- `setrlimit()` sets new resource limits.
+- RLIMIT_NOFILE controls the maximum number of open file descriptors.
+
 ### Control Groups (cgroups) Basics
-- Creating and managing cgroups
-- Limiting CPU, memory, and I/O for process groups
+
+Cgroups allow grouping processes and managing their resource usage collectively.
+
+Key Concepts:
+- Hierarchical organization of processes.
+- Controllers for different resources (CPU, memory, I/O, etc.).
+- Dynamic resource allocation and limitation.
 
 Example (using libcgroup):
 ```c
@@ -202,6 +265,12 @@ int main() {
 }
 ```
 
+Explanation:
+- We create a new cgroup named "my_cgroup".
+- We add a CPU controller to the cgroup.
+- We set the CPU shares to 512, which determines the relative CPU allocation.
+- The cgroup is created in the system.
+
 ## Practice Exercises
 
 1. Write a program that creates a child process, sets its scheduling policy to SCHED_FIFO, and measures the execution time difference compared to the parent process running under SCHED_OTHER.
@@ -229,7 +298,7 @@ int main() {
 
 ## Additional Resources
 
-1. "Understanding the Linux Kernel" by Daniel P. Bovet and Marco Cesati
+1. "Advanced Programming in the UNIX Environment" by W. Richard Stevens and Stephen A. Rago
 2. Linux man pages: man 2 fork, man 2 execve, man 2 wait, man 2 nice, man 2 setpriority
 3. Linux kernel documentation on scheduling: https://www.kernel.org/doc/html/latest/scheduler/sched-design-CFS.html
 4. Control Groups documentation: https://www.kernel.org/doc/Documentation/cgroup-v1/cgroups.txt
