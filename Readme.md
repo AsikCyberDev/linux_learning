@@ -65,7 +65,7 @@ This repository documents my 15-day journey to understand the intricate workings
 2. Union File Systems: Layered file systems
 3. Network File Systems: NFS and CIFS implementations
 
-a### Day 12: Performance and Monitoring
+### Day 12: Performance and Monitoring
 1. Profiling Tools: perf, strace, and ftrace
 2. /proc and /sys Filesystems: Kernel interfaces for system info
 3. Load Average and System Metrics: Understanding system load
