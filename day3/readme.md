@@ -1,6 +1,4 @@
-Here's the content for Day 3 in Markdown format:
 
-```markdown
 # Day 3: Process Scheduling and Memory Management
 
 ## 1. Process Scheduling: CFS (Completely Fair Scheduler)
