@@ -1,313 +1,420 @@
+# Day 12: Inter-Process Communication (IPC) and Advanced I/O
 
-# Day 12: Containerization and Virtualization
+## 1. Inter-Process Communication (IPC)
 
-## 1. Docker Fundamentals
+### Overview of IPC Mechanisms
 
-### Introduction
-Docker is a platform for developing, shipping, and running applications in containers. Containers allow developers to package up an application with all of its dependencies and ship it as one package.
+Key Concepts:
+- Types of IPC: pipes, FIFOs, message queues, shared memory, semaphores
+- Choosing the right IPC mechanism for different scenarios
 
-### Key Concepts
+### Pipes and FIFOs
 
-1. **Container**
-   - Lightweight, standalone, executable package that includes everything needed to run a piece of software
-   - Includes the code, runtime, system tools, libraries, and settings
+Key Concepts:
+- Anonymous pipes for related processes
+- Named pipes (FIFOs) for unrelated processes
 
-2. **Image**
-   - Read-only template used to create containers
-   - Often based on another image, with additional customization
+Example: Using a pipe for parent-child communication
 
-3. **Dockerfile**
-   - Text file that contains instructions for building a Docker image
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 
-4. **Docker Hub**
-   - Cloud-based registry service for storing and sharing Docker images
+#define BUFFER_SIZE 256
 
-5. **Docker Compose**
-   - Tool for defining and running multi-container Docker applications
+int main() {
+    int pipefd[2];
+    pid_t pid;
+    char buffer[BUFFER_SIZE];
 
-### Basic Docker Commands
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    }
 
-1. **Run a container**
-   ```
-   docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
-   ```
+    pid = fork();
 
-2. **List containers**
-   ```
-   docker ps [OPTIONS]
-   ```
+    if (pid == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) {  // Child process
+        close(pipefd[1]);  // Close unused write end
+        read(pipefd[0], buffer, BUFFER_SIZE);
+        printf("Child received: %s\n", buffer);
+        close(pipefd[0]);
+        exit(EXIT_SUCCESS);
+    } else {  // Parent process
+        close(pipefd[0]);  // Close unused read end
+        strcpy(buffer, "Hello from parent!");
+        write(pipefd[1], buffer, strlen(buffer) + 1);
+        close(pipefd[1]);
+        wait(NULL);  // Wait for child to finish
+        exit(EXIT_SUCCESS);
+    }
 
-3. **Stop a container**
-   ```
-   docker stop [OPTIONS] CONTAINER [CONTAINER...]
-   ```
-
-4. **Remove a container**
-   ```
-   docker rm [OPTIONS] CONTAINER [CONTAINER...]
-   ```
-
-5. **List images**
-   ```
-   docker images [OPTIONS] [REPOSITORY[:TAG]]
-   ```
-
-6. **Build an image from a Dockerfile**
-   ```
-   docker build [OPTIONS] PATH | URL | -
-   ```
-
-### Practical Example: Creating a Simple Docker Container
-
-1. Create a Dockerfile:
-
-```Dockerfile
-FROM ubuntu:20.04
-RUN apt-get update && apt-get install -y nginx
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+    return 0;
+}
 ```
 
-2. Build the image:
-```
-docker build -t my-nginx .
-```
+### System V IPC
 
-3. Run the container:
-```
-docker run -d -p 8080:80 my-nginx
-```
+Key Concepts:
+- Message queues
+- Shared memory
+- Semaphores
 
-### Docker Compose Example
+Example: Using System V shared memory
 
-Create a `docker-compose.yml` file:
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 
-```yaml
-version: '3'
-services:
-  web:
-    image: nginx:alpine
-    ports:
-      - "8080:80"
-  database:
-    image: postgres:12
-    environment:
-      POSTGRES_PASSWORD: example
-```
+#define SHM_SIZE 1024
 
-Run with:
-```
-docker-compose up -d
-```
+int main() {
+    key_t key = ftok("shmfile", 65);
+    int shmid = shmget(key, SHM_SIZE, IPC_CREAT | 0666);
 
-### Gotchas and Best Practices
+    if (shmid == -1) {
+        perror("shmget");
+        exit(1);
+    }
 
-1. **Image Size**: Use minimal base images when possible.
-2. **Security**: Avoid running containers as root.
-3. **Persistence**: Use volumes for data that needs to persist.
-4. **Networking**: Understand Docker's networking models.
-5. **Cleanup**: Regularly remove unused containers and images.
+    char *str = (char*) shmat(shmid, NULL, 0);
 
-### Interview Questions
+    printf("Write Data : ");
+    fgets(str, SHM_SIZE, stdin);
 
-1. Q: What's the difference between a Docker container and a virtual machine?
-   A: The main differences are:
-      - Containers share the host OS kernel, while VMs have their own OS
-      - Containers are more lightweight and start up faster
-      - VMs provide stronger isolation but with more overhead
-      - Containers are ideal for microservices, while VMs are better for running multiple applications with different OS requirements
+    printf("Data written in memory: %s\n", str);
 
-2. Q: Explain the concept of Docker layers. How do they contribute to efficiency?
-   A: Docker images are built using a layered filesystem:
-      - Each instruction in a Dockerfile creates a new layer
-      - Layers are cached and reused in subsequent builds
-      - Only changed layers need to be rebuilt
-      - Layers are shared between images, saving disk space and network bandwidth
-      This system makes building, sharing, and updating images more efficient.
+    shmdt(str);
 
-3. Q: How would you persist data in a Docker container?
-   A: There are several ways to persist data:
-      1. Volumes: Docker-managed directories on the host filesystem
-         ```
-         docker run -v my_volume:/app/data my_image
-         ```
-      2. Bind mounts: Mount a specific directory from the host
-         ```
-         docker run -v /host/path:/container/path my_image
-         ```
-      3. tmpfs mounts: For storing temporary data in memory
-         ```
-         docker run --tmpfs /app/temp my_image
-         ```
-      Volumes are generally the preferred method as they're managed by Docker and work well across different operating systems.
-
-4. Q: What is Docker Compose and when would you use it?
-   A: Docker Compose is a tool for defining and running multi-container Docker applications:
-      - It uses a YAML file to configure application services
-      - It allows you to start all services with a single command
-      - It's useful for development, testing, and staging environments
-      - It simplifies the process of linking containers and defining networks
-      You would use Docker Compose when your application requires multiple interconnected services, like a web server, database, and caching layer.
-
-5. Q: How do you handle secrets (like passwords) in Docker?
-   A: There are several approaches to handling secrets in Docker:
-      1. Docker Secrets (in Swarm mode):
-         ```
-         docker secret create my_secret my_file.txt
-         docker service create --secret my_secret my_image
-         ```
-      2. Environment variables (less secure):
-         ```
-         docker run -e PASSWORD=mysecret my_image
-         ```
-      3. Using external secret management tools like HashiCorp Vault
-      4. Mounting secrets at runtime:
-         ```
-         docker run -v /path/to/secrets:/run/secrets my_image
-         ```
-      The best practice is to use Docker Secrets or a dedicated secret management tool, avoiding hardcoded secrets in images or environment variables.
-
-## 2. Virtualization with KVM
-
-### Introduction
-KVM (Kernel-based Virtual Machine) is a virtualization module in the Linux kernel that allows the kernel to function as a hypervisor. It enables running multiple virtual machines on a single physical host.
-
-### Key Concepts
-
-1. **Hypervisor**
-   - Software that creates and runs virtual machines
-   - KVM is a Type-1 (bare-metal) hypervisor
-
-2. **Virtual Machine (VM)**
-   - Emulation of a computer system
-   - Provides functionality of a physical computer
-
-3. **QEMU**
-   - Machine emulator often used with KVM
-   - Provides device emulation
-
-4. **libvirt**
-   - API and management tool for platform virtualization
-
-### Setting Up KVM
-
-1. Check for hardware virtualization support:
-   ```
-   egrep -c '(vmx|svm)' /proc/cpuinfo
-   ```
-
-2. Install KVM and related tools:
-   ```
-   sudo apt-get install qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils
-   ```
-
-3. Add user to libvirt group:
-   ```
-   sudo adduser $USER libvirt
-   ```
-
-### Managing VMs with virsh
-
-1. **List VMs**
-   ```
-   virsh list --all
-   ```
-
-2. **Start a VM**
-   ```
-   virsh start vm_name
-   ```
-
-3. **Stop a VM**
-   ```
-   virsh shutdown vm_name
-   ```
-
-4. **Delete a VM**
-   ```
-   virsh undefine vm_name
-   ```
-
-### Creating a VM with virt-install
-
-```bash
-virt-install \
-  --name ubuntu20 \
-  --ram 2048 \
-  --disk path=/var/lib/libvirt/images/ubuntu20.qcow2,size=10 \
-  --vcpus 2 \
-  --os-type linux \
-  --os-variant ubuntu20.04 \
-  --network bridge=virbr0 \
-  --graphics none \
-  --console pty,target_type=serial \
-  --location 'http://archive.ubuntu.com/ubuntu/dists/focal/main/installer-amd64/' \
-  --extra-args 'console=ttyS0,115200n8 serial'
+    return 0;
+}
 ```
 
-### Gotchas and Best Practices
+### POSIX IPC
 
-1. **Resource Allocation**: Carefully manage CPU, memory, and storage allocation.
-2. **Networking**: Understand different networking modes (NAT, bridged, etc.).
-3. **Snapshots**: Use VM snapshots for backups and before major changes.
-4. **Security**: Keep the host system and VMs updated and secured.
-5. **Performance Monitoring**: Regularly monitor host and VM performance.
+Key Concepts:
+- POSIX message queues
+- POSIX shared memory
+- POSIX semaphores
 
-### Interview Questions
+Example: Using POSIX shared memory
 
-1. Q: What is the difference between KVM and other virtualization technologies like VirtualBox or VMware?
-   A: Key differences include:
-      - KVM is integrated into the Linux kernel, making it more efficient
-      - KVM is a Type-1 (bare-metal) hypervisor, while VirtualBox is Type-2 (hosted)
-      - KVM generally offers better performance for Linux guests
-      - VirtualBox and VMware have more user-friendly interfaces
-      - KVM is open-source and free, while VMware has proprietary versions
-      - KVM is primarily managed through command-line tools, though GUI tools exist
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
-2. Q: Explain the relationship between KVM, QEMU, and libvirt.
-   A:
-      - KVM: Kernel module that provides access to hardware virtualization features
-      - QEMU: Provides hardware emulation and works with KVM for better performance
-      - libvirt: Management layer that provides a common API for managing different virtualization technologies, including KVM/QEMU
-   Together, they form a complete virtualization stack: KVM provides the core virtualization infrastructure, QEMU handles hardware emulation, and libvirt provides management capabilities.
+#define SHM_NAME "/my_shm"
+#define SHM_SIZE 1024
 
-3. Q: How would you migrate a KVM virtual machine from one host to another?
-   A: There are several ways to migrate a KVM VM:
-      1. Offline migration:
-         - Shut down the VM
-         - Copy the VM's disk image and configuration files to the new host
-         - Define the VM on the new host using the copied files
-      2. Live migration (requires shared storage):
-         ```
-         virsh migrate --live vm_name qemu+ssh://destination_host/system
-         ```
-      3. Using virt-manager GUI tool for live or offline migration
+int main() {
+    int fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
+    if (fd == -1) {
+        perror("shm_open");
+        exit(1);
+    }
 
-      The choice depends on factors like downtime tolerance, network bandwidth, and storage setup.
+    ftruncate(fd, SHM_SIZE);
 
-4. Q: What are some best practices for securing KVM virtual machines?
-   A: Some best practices include:
-      - Keep the host system and VMs updated
-      - Use SELinux or AppArmor for additional security
-      - Implement network segmentation (e.g., separate bridge for VMs)
-      - Use virtio-random for better VM entropy
-      - Disable unnecessary features and devices
-      - Use encrypted storage for sensitive VMs
-      - Implement strong access controls for the hypervisor
-      - Regularly audit and monitor VM activities
-      - Use secure protocols (like SSH) for remote management
+    char *ptr = mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (ptr == MAP_FAILED) {
+        perror("mmap");
+        exit(1);
+    }
 
-5. Q: How does KVM achieve near-native performance for VMs?
-   A: KVM achieves near-native performance through several mechanisms:
-      - Direct execution: VMs run directly on the host CPU using hardware virtualization extensions
-      - Memory management: Uses hardware-assisted paging (e.g., Intel EPT or AMD RVI)
-      - I/O virtualization: Utilizes technologies like virtio for efficient I/O operations
-      - Kernel integration: Being part of the Linux kernel allows for efficient resource management
-      - Paravirtualization: Optimized drivers (virtio) for network and disk operations
-      - CPU feature passthrough: Allows VMs to use advanced CPU features
-      These features combined allow KVM to minimize virtualization overhead and provide performance close to bare-metal systems.
+    sprintf(ptr, "Hello, POSIX shared memory!");
+    printf("Written to shared memory: %s\n", ptr);
 
-This content covers the fundamentals of Docker containerization and KVM virtualization, providing both theoretical knowledge and practical examples. It should give a comprehensive understanding of these critical aspects of modern infrastructure management.
+    munmap(ptr, SHM_SIZE);
+    close(fd);
+    shm_unlink(SHM_NAME);
+
+    return 0;
+}
 ```
 
-This completes the content for Day 12, covering Containerization with Docker and Virtualization with KVM in detail.
+## 2. Advanced I/O Operations
+
+### Memory-mapped I/O
+
+Key Concepts:
+- Using mmap() for file I/O
+- Advantages and disadvantages of memory-mapped I/O
+
+Example: Reading a file using mmap()
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <file>\n", argv[0]);
+        exit(1);
+    }
+
+    int fd = open(argv[1], O_RDONLY);
+    if (fd == -1) {
+        perror("open");
+        exit(1);
+    }
+
+    struct stat sb;
+    if (fstat(fd, &sb) == -1) {
+        perror("fstat");
+        exit(1);
+    }
+
+    char *addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (addr == MAP_FAILED) {
+        perror("mmap");
+        exit(1);
+    }
+
+    write(STDOUT_FILENO, addr, sb.st_size);
+
+    munmap(addr, sb.st_size);
+    close(fd);
+
+    return 0;
+}
+```
+
+### Asynchronous I/O
+
+Key Concepts:
+- POSIX AIO operations
+- Callback mechanisms
+
+Example: Basic asynchronous read operation
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <aio.h>
+
+#define BUFFER_SIZE 1024
+
+int main() {
+    char buffer[BUFFER_SIZE];
+    struct aiocb cb;
+    int fd;
+
+    fd = open("test.txt", O_RDONLY);
+    if (fd == -1) {
+        perror("open");
+        exit(1);
+    }
+
+    memset(&cb, 0, sizeof(struct aiocb));
+    cb.aio_nbytes = BUFFER_SIZE;
+    cb.aio_fildes = fd;
+    cb.aio_offset = 0;
+    cb.aio_buf = buffer;
+
+    if (aio_read(&cb) == -1) {
+        perror("aio_read");
+        exit(1);
+    }
+
+    while (aio_error(&cb) == EINPROGRESS) {
+        // Wait for completion
+    }
+
+    int ret = aio_return(&cb);
+    if (ret == -1) {
+        perror("aio_return");
+        exit(1);
+    }
+
+    printf("Read %d bytes: %.*s\n", ret, ret, (char*)cb.aio_buf);
+
+    close(fd);
+    return 0;
+}
+```
+
+### Scatter-Gather I/O
+
+Key Concepts:
+- Using readv() and writev()
+- Efficient handling of non-contiguous buffers
+
+Example: Using writev() to write from multiple buffers
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include /uio.h>
+#include <fcntl.h>
+
+int main() {
+    struct iovec iov[3];
+    char *str0 = "Hello ";
+    char *str1 = "scatter-gather ";
+    char *str2 = "I/O!\n";
+
+    iov[0].iov_base = str0;
+    iov[0].iov_len = strlen(str0);
+    iov[1].iov_base = str1;
+    iov[1].iov_len = strlen(str1);
+    iov[2].iov_base = str2;
+    iov[2].iov_len = strlen(str2);
+
+    int fd = open("output.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd == -1) {
+        perror("open");
+        exit(1);
+    }
+
+    ssize_t nwritten = writev(fd, iov, 3);
+    if (nwritten == -1) {
+        perror("writev");
+        exit(1);
+    }
+
+    printf("Wrote %zd bytes\n", nwritten);
+
+    close(fd);
+    return 0;
+}
+```
+
+## 3. Advanced File Operations
+
+### File Locking
+
+Key Concepts:
+- Advisory vs. mandatory locking
+- Using fcntl() for file locking
+
+Example: Implementing a simple file lock
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+int main() {
+    int fd = open("lockfile", O_RDWR | O_CREAT, 0644);
+    if (fd == -1) {
+        perror("open");
+        exit(1);
+    }
+
+    struct flock fl = {
+        .l_type = F_WRLCK,
+        .l_whence = SEEK_SET,
+        .l_start = 0,
+        .l_len = 0,
+    };
+
+    printf("Trying to get lock...\n");
+    if (fcntl(fd, F_SETLKW, &fl) == -1) {
+        perror("fcntl");
+        exit(1);
+    }
+
+    printf("Got lock. Press enter to release...\n");
+    getchar();
+
+    fl.l_type = F_UNLCK;
+    if (fcntl(fd, F_SETLK, &fl) == -1) {
+        perror("fcntl");
+        exit(1);
+    }
+
+    printf("Released lock\n");
+
+    close(fd);
+    return 0;
+}
+```
+
+### Extended Attributes
+
+Key Concepts:
+- Setting and getting extended attributes
+- Use cases for extended attributes
+
+Example: Setting and getting an extended attribute
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <attr/xattr.h>
+
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <file>\n", argv[0]);
+        exit(1);
+    }
+
+    const char *path = argv[1];
+    const char *name = "user.comment";
+    const char *value = "This is a test comment";
+
+    if (setxattr(path, name, value, strlen(value), 0) == -1) {
+        perror("setxattr");
+        exit(1);
+    }
+
+    char buffer[256];
+    ssize_t len = getxattr(path, name, buffer, sizeof(buffer));
+    if (len == -1) {
+        perror("getxattr");
+        exit(1);
+    }
+
+    printf("Extended attribute '%s' value: %.*s\n", name, (int)len, buffer);
+
+    return 0;
+}
+```
+
+## Practice Exercises
+
+1. Implement a simple client-server application using message queues for communication.
+
+2. Create a program that uses shared memory and semaphores to implement a producer-consumer problem.
+
+3. Write a file copy program that uses memory-mapped I/O for efficient copying of large files.
+
+4. Develop a multi-process application that uses various IPC mechanisms to communicate and synchronize.
+
+## Important Tools and Utilities
+
+- ipcs: Examine IPC resources
+- ipcrm: Remove IPC resources
+- strace: Trace system calls and signals
+- lsof: List open files
+
+## Additional Resources
+
+1. "The Linux Programming Interface" by Michael Kerrisk
+2. "Advanced Programming in the UNIX Environment" by W. Richard Stevens and Stephen A. Rago
+3. "Linux System Programming" by Robert Love
+4. "POSIX Programmers Guide" by Donald Lewine

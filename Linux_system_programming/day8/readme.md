@@ -1,232 +1,347 @@
+# Day 8: Signals and Real-Time Programming
 
-# Day 8: File Systems and Storage
+## 1. Introduction to Signals
 
-## 1. Linux File Systems: EXT4, XFS, and Btrfs
+### Overview of Signals
 
-### Introduction
-File systems are crucial components of any operating system, responsible for organizing and managing data on storage devices. Linux supports various file systems, each with its own features and use cases. We'll focus on three popular Linux file systems: EXT4, XFS, and Btrfs.
+Key Concepts:
+- What are signals?
+- Standard signals vs. real-time signals
+- Signal numbers and their meanings
 
-### EXT4 (Fourth Extended File System)
+### Signal Handling
 
-1. **Features**
-   - Journaling file system
-   - Backwards compatible with EXT2 and EXT3
-   - Supports large file sizes and large file systems
-   - Efficient handling of small files
+Key Concepts:
+- Default actions for signals
+- Ignoring signals
+- Catching and handling signals
 
-2. **Use Cases**
-   - General-purpose file system
-   - Default for many Linux distributions
-   - Suitable for most desktop and server applications
+Example: Basic signal handling
 
-3. **Key Concepts**
-   - Extents: Contiguous blocks of storage
-   - Delayed allocation: Improves performance and reduces fragmentation
-   - Journal checksumming: Ensures integrity of journal data
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
 
-### XFS (X File System)
+void signal_handler(int signum) {
+    printf("Caught signal %d\n", signum);
+}
 
-1. **Features**
-   - High-performance journaling file system
-   - Excellent for large files and high I/O throughput
-   - Online defragmentation and expansion
-   - Metadata intensive operations
+int main() {
+    signal(SIGINT, signal_handler);
 
-2. **Use Cases**
-   - Large-scale enterprise storage systems
-   - Media streaming and high-performance computing
-   - Databases with large files
+    printf("Process will sleep for 10 seconds. Try pressing Ctrl+C...\n");
+    sleep(10);
 
-3. **Key Concepts**
-   - Allocation Groups: Allows for parallel I/O operations
-   - Delayed Logging: Improves metadata operation performance
-   - B+ Tree indexing: Efficient handling of directories with many files
-
-### Btrfs (B-tree File System)
-
-1. **Features**
-   - Copy-on-write (CoW) file system
-   - Built-in RAID support
-   - Snapshots and cloning
-   - Online filesystem check and repair
-
-2. **Use Cases**
-   - Systems requiring advanced features like snapshots and dynamic inode allocation
-   - Software-defined storage solutions
-   - Environments needing flexible storage management
-
-3. **Key Concepts**
-   - B-tree structure: Efficient handling of large amounts of data
-   - Subvolumes: Separate internal file system roots
-   - CoW: Allows for efficient snapshots and data integrity
-
-### Practical Example: Creating and Mounting File Systems
-
-Here's a bash script demonstrating how to create and mount EXT4, XFS, and Btrfs file systems:
-
-```bash
-#!/bin/bash
-
-# Create loop devices for testing
-dd if=/dev/zero of=ext4.img bs=1M count=100
-dd if=/dev/zero of=xfs.img bs=1M count=100
-dd if=/dev/zero of=btrfs.img bs=1M count=100
-
-# Create file systems
-mkfs.ext4 ext4.img
-mkfs.xfs xfs.img
-mkfs.btrfs btrfs.img
-
-# Mount file systems
-mkdir -p /mnt/{ext4,xfs,btrfs}
-mount -o loop ext4.img /mnt/ext4
-mount -o loop xfs.img /mnt/xfs
-mount -o loop btrfs.img /mnt/btrfs
-
-# Display mounted file systems
-df -Th | grep "/mnt/"
-
-# Cleanup (uncomment to use)
-# umount /mnt/{ext4,xfs,btrfs}
-# rm -f ext4.img xfs.img btrfs.img
-# rmdir /mnt/{ext4,xfs,btrfs}
+    printf("Sleep completed.\n");
+    return 0;
+}
 ```
 
-### Gotchas and Best Practices
+## 2. Advanced Signal Handling
 
-1. **File System Choice**: Select based on workload characteristics and requirements.
-2. **Fragmentation**: Consider periodic defragmentation for EXT4 and XFS.
-3. **Backup**: Implement regular backups, especially when using advanced features like Btrfs snapshots.
-4. **Monitoring**: Regularly monitor file system usage and performance.
-5. **Journaling**: Understand the trade-offs between performance and data integrity with journaling options.
+### Sigaction
 
-### Interview Questions
+Key Concepts:
+- Using sigaction() for more control over signal handling
+- Signal masks and blocking signals
 
-1. Q: What are the main differences between EXT4 and XFS?
-   A: EXT4 is more general-purpose and better for small files, while XFS excels with large files and high I/O throughput. XFS supports larger file system sizes and has better scalability for parallel I/O operations. EXT4 has better backward compatibility with older EXT file systems.
+Example: Using sigaction()
 
-2. Q: Explain the concept of Copy-on-Write (CoW) in Btrfs.
-   A: Copy-on-Write is a technique where modifications to data are written to a new location, rather than overwriting the original data. This allows for efficient snapshots, as only changed data needs to be stored separately. It also provides better data integrity, as the original data remains intact until the new write is complete.
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <string.h>
 
-3. Q: What is journaling in file systems, and why is it important?
-   A: Journaling is a technique where changes to the file system are first written to a journal before being committed to the main file system structure. It's important for maintaining file system consistency in case of system crashes or power failures, allowing for faster recovery and reducing the risk of data corruption.
+void sigaction_handler(int signum, siginfo_t *info, void *context) {
+    printf("Caught signal %d\n", signum);
+    if (signum == SIGINT) {
+        printf("SIGINT received. Sender's PID: %d\n", info->si_pid);
+    }
+}
 
-4. Q: How does delayed allocation in EXT4 improve performance?
-   A: Delayed allocation postpones the allocation of disk blocks until the data is actually written to disk. This allows the file system to make more efficient decisions about block allocation, reducing fragmentation and improving write performance by coalescing multiple small writes into larger, more efficient I/O operations.
+int main() {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = sigaction_handler;
+    sa.sa_flags = SA_SIGINFO;
 
-5. Q: What are the advantages of using Btrfs subvolumes?
-   A: Btrfs subvolumes provide:
-      - Flexible management of storage space within a single file system
-      - Ability to set different mount options for different parts of the file system
-      - Efficient snapshots of specific parts of the file system
-      - Easier backup and replication of specific data sets
-      - Potential for better organization of data in complex storage environments
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(1);
+    }
 
-## 2. Storage Stack and Block Layer
+    printf("Process will sleep for 10 seconds. Try pressing Ctrl+C...\n");
+    sleep(10);
 
-### Introduction
-The Linux storage stack is a complex system that manages how data is stored and retrieved from various storage devices. Understanding the storage stack and block layer is crucial for optimizing storage performance and implementing advanced storage solutions.
-
-### Key Components
-
-1. **VFS (Virtual File System)**
-   - Abstraction layer that provides a common interface for different file systems
-   - Allows transparent access to various file systems
-
-2. **File Systems**
-   - Implement the actual organization and storage of files
-   - Examples: EXT4, XFS, Btrfs
-
-3. **Page Cache**
-   - Caches file data in memory for faster access
-   - Implements read-ahead and write-back mechanisms
-
-4. **Block Layer**
-   - Manages I/O operations to block devices
-   - Implements I/O scheduling and merging
-
-5. **Device Drivers**
-   - Interface between the kernel and specific hardware devices
-   - Implement hardware-specific operations
-
-### Block Layer in Detail
-
-1. **I/O Scheduler**
-   - Reorders and merges I/O requests for better performance
-   - Different schedulers: CFQ, Deadline, NOOP
-
-2. **Bio Structure**
-   - Represents a block I/O operation
-   - Contains information about the data transfer
-
-3. **Request Queue**
-   - Manages pending I/O requests for a block device
-   - Implements the actual I/O scheduling
-
-4. **Block Device Operations**
-   - Define how to interact with specific block devices
-   - Implemented by device drivers
-
-### Practical Example: Analyzing Block Device I/O
-
-Here's a bash script to monitor block device I/O using `iostat`:
-
-```bash
-#!/bin/bash
-
-# Install sysstat if not already installed
-# sudo apt-get install sysstat
-
-# Run iostat to monitor block device I/O
-iostat -xm 5 3
+    printf("Sleep completed.\n");
+    return 0;
+}
 ```
 
-### Advanced Concepts
+### Signal Sets and Masks
 
-1. **Multi-queue Block Layer**
-   - Improves scalability for high-performance SSDs
-   - Allows for parallel processing of I/O requests
+Key Concepts:
+- Creating and manipulating signal sets
+- Blocking and unblocking signals
 
-2. **Logical Volume Management (LVM)**
-   - Provides flexible management of storage devices
-   - Allows for dynamic resizing and snapshotting
+Example: Blocking signals
 
-3. **RAID (Redundant Array of Independent Disks)**
-   - Combines multiple disk drive components into a logical unit
-   - Improves performance and/or provides data redundancy
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
 
-4. **NVMe (Non-Volatile Memory Express)**
-   - Protocol for accessing high-speed storage media attached via PCI Express
-   - Reduces I/O overhead and provides lower latency
+int main() {
+    sigset_t set;
 
-### Gotchas and Best Practices
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
 
-1. **I/O Scheduler Choice**: Select appropriate I/O scheduler based on workload and device characteristics.
-2. **Queue Depth**: Monitor and optimize queue depth for better performance, especially with SSDs.
-3. **Direct I/O**: Consider using direct I/O for applications that manage their own caching.
-4. **Alignment**: Ensure proper alignment of partitions and file systems for optimal performance.
-5. **Monitoring**: Regularly monitor I/O performance to identify bottlenecks and issues.
+    // Block SIGINT
+    if (sigprocmask(SIG_BLOCK, &set, NULL) == -1) {
+        perror("sigprocmask");
+        exit(1);
+    }
 
-### Interview Questions
+    printf("SIGINT is now blocked. Try pressing Ctrl+C...\n");
+    sleep(5);
 
-1. Q: Explain the role of the I/O scheduler in the Linux block layer.
-   A: The I/O scheduler is responsible for ordering and merging I/O requests to improve overall system performance. It aims to minimize seek time on traditional hard drives, maximize throughput, and ensure fairness between processes. Different schedulers (e.g., CFQ, Deadline) are optimized for different workloads and device types.
+    // Unblock SIGINT
+    if (sigprocmask(SIG_UNBLOCK, &set, NULL) == -1) {
+        perror("sigprocmask");
+        exit(1);
+    }
 
-2. Q: What is the difference between buffered and direct I/O?
-   A: Buffered I/O uses the kernel's page cache to improve performance by caching read and write operations. Direct I/O bypasses the page cache, allowing applications to manage their own caching. Direct I/O is useful for applications like databases that have their own caching mechanisms and need more control over data consistency.
+    printf("SIGINT is now unblocked.\n");
+    sleep(5);
 
-3. Q: How does the multi-queue block layer improve I/O performance?
-   A: The multi-queue block layer allows for parallel processing of I/O requests by using multiple queues. This improves scalability on systems with many cores and high-performance storage devices like NVMe SSDs. It reduces contention and allows for better utilization of modern storage hardware capabilities.
-
-4. Q: What is the purpose of the bio structure in the block layer?
-   A: The bio (Block I/O) structure represents an I/O operation in the block layer. It contains information about the data transfer, including the source/destination memory addresses, the involved block device, and the sectors to be read or written. The bio structure allows for efficient handling of I/O requests, including splitting and merging operations.
-
-5. Q: Explain the concept of I/O merging and how it improves performance.
-   A: I/O merging is the process of combining multiple small I/O requests into larger ones. This improves performance by:
-      - Reducing the number of I/O operations, which decreases overhead
-      - Increasing the size of each I/O operation, which is more efficient for storage devices
-      - Minimizing seek time on traditional hard drives by combining nearby operations
-      - Reducing interrupts and context switches, improving overall system efficiency
-
-This content covers the essentials of Linux File Systems and the Storage Stack, providing both theoretical knowledge and practical examples. It should give a comprehensive understanding of these critical aspects of storage management in Linux systems.
+    return 0;
+}
 ```
+
+## 3. Real-Time Signals
+
+### Introduction to Real-Time Signals
+
+Key Concepts:
+- Differences between standard and real-time signals
+- Queuing of real-time signals
+
+### Using Real-Time Signals
+
+Example: Sending and handling real-time signals
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <string.h>
+
+#define SIGRTMIN_VALUE (__libc_current_sigrtmin())
+#define SIGRTMAX_VALUE (__libc_current_sigrtmax())
+
+void rt_sighandler(int signo, siginfo_t *info, void *context) {
+    printf("Caught real-time signal %d\n", signo);
+    printf("Value passed: %d\n", info->si_value.sival_int);
+}
+
+int main() {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = rt_sighandler;
+    sa.sa_flags = SA_SIGINFO;
+
+    // Set up handler for all real-time signals
+    for (int i = SIGRTMIN_VALUE; i <= SIGRTMAX_VALUE; i++) {
+        if (sigaction(i, &sa, NULL) == -1) {
+            perror("sigaction");
+            exit(1);
+        }
+    }
+
+    // Send a real-time signal to self
+    union sigval value;
+    value.sival_int = 42;
+    if (sigqueue(getpid(), SIGRTMIN_VALUE, value) == -1) {
+        perror("sigqueue");
+        exit(1);
+    }
+
+    sleep(1);  // Allow time for signal handling
+
+    return 0;
+}
+```
+
+## 4. Timer and Alarm Functions
+
+### Using alarm()
+
+Key Concepts:
+- Setting up alarms
+- Handling SIGALRM
+
+Example: Using alarm()
+
+```c
+#include <stdio.h>
+#include <unistd.h>
+#include <signal.h>
+
+void alarm_handler(int signum) {
+    printf("Alarm fired!\n");
+}
+
+int main() {
+    signal(SIGALRM, alarm_handler);
+
+    printf("Setting alarm for 5 seconds...\n");
+    alarm(5);
+
+    pause();  // Wait for a signal to be delivered
+
+    return 0;
+}
+```
+
+### POSIX Timers
+
+Key Concepts:
+- Creating and using POSIX timers
+- Timer expiration notifications
+
+Example: Using POSIX timers
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <time.h>
+
+#define CLOCKID CLOCK_REALTIME
+#define SIG SIGRTMIN
+
+static void handler(int sig, siginfo_t *si, void *uc) {
+    timer_t *tidp;
+    tidp = si->si_value.sival_ptr;
+
+    printf("Caught signal %d\n", sig);
+}
+
+int main() {
+    timer_t timerid;
+    struct sigevent sev;
+    struct itimerspec its;
+    struct sigaction sa;
+
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = handler;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIG, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(1);
+    }
+
+    sev.sigev_notify = SIGEV_SIGNAL;
+    sev.sigev_signo = SIG;
+    sev.sigev_value.sival_ptr = &timerid;
+    if (timer_create(CLOCKID, &sev, &timerid) == -1) {
+        perror("timer_create");
+        exit(1);
+    }
+
+    its.it_value.tv_sec = 5;
+    its.it_value.tv_nsec = 0;
+    its.it_interval.tv_sec = 0;
+    its.it_interval.tv_nsec = 0;
+
+    if (timer_settime(timerid, 0, &its, NULL) == -1) {
+        perror("timer_settime");
+        exit(1);
+    }
+
+    sleep(6);  // Wait for the timer to expire
+
+    timer_delete(timerid);
+    return 0;
+}
+```
+
+## 5. Real-Time Scheduling
+
+### Introduction to Real-Time Scheduling
+
+Key Concepts:
+- Real-time priorities
+- SCHED_FIFO and SCHED_RR scheduling policies
+
+### Setting Real-Time Priorities
+
+Example: Setting real-time priority
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sched.h>
+
+int main() {
+    struct sched_param param;
+    int max_priority;
+
+    max_priority = sched_get_priority_max(SCHED_FIFO);
+    if (max_priority == -1) {
+        perror("sched_get_priority_max");
+        exit(1);
+    }
+
+    param.sched_priority = max_priority;
+    if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
+        perror("sched_setscheduler");
+        exit(1);
+    }
+
+    printf("Set to SCHED_FIFO with maximum priority.\n");
+
+    // Your real-time task here
+    sleep(10);
+
+    return 0;
+}
+```
+
+## 6. Best Practices and Considerations
+
+- Signal-safe functions
+- Avoiding race conditions with signals
+- Proper use of real-time features
+
+## Practice Exercises
+
+1. Implement a simple shell that can handle Ctrl+C (SIGINT) and Ctrl+Z (SIGTSTP).
+
+2. Create a program that uses multiple real-time signals to communicate between processes.
+
+3. Develop a real-time task scheduler using POSIX timers and real-time priorities.
+
+4. Implement a signal-based IPC mechanism for synchronizing multiple processes.
+
+## Important Tools and Utilities
+
+- kill: Send signals to processes
+- top: View and manage process priorities
+- chrt: Manipulate real-time attributes of a process
+
+## Additional Resources
+
+1. "The Linux Programming Interface" by Michael Kerrisk (chapters on signals and timers)
+2. "Programming with POSIX Threads" by David R. Butenhof (for understanding real-time concepts)
+3. Linux man pages: man 7 signal, man 7 time, man 7 sched
+4. "Real-Time Linux Programming" by John Shapley Gray

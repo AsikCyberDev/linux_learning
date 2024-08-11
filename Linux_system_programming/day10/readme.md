@@ -1,273 +1,288 @@
+# Day 10: Advanced Memory Management and Debugging Techniques
 
-# Day 10: Security and Access Control
+## 1. Advanced Memory Management
 
-## 1. Linux Security Modules (LSM)
+### Memory Allocation Strategies
 
-### Introduction
-Linux Security Modules (LSM) is a framework that allows the Linux kernel to support various security models without favoring any specific security implementation. LSM provides a set of hooks in the kernel, which security modules can use to implement additional security checks.
+Key Concepts:
+- Understanding the heap and memory allocation
+- Strategies for efficient memory use
+- Custom memory allocators
 
-### Key Concepts
+Example: Simple memory pool allocator
 
-1. **Security Hooks**
-   - Points in the kernel where security checks can be performed
-   - Cover operations like file access, network operations, and process management
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-2. **Mandatory Access Control (MAC)**
-   - Access control enforced by the system, not by file owners
-   - Implemented by security modules like SELinux and AppArmor
+#define POOL_SIZE 1024
+#define BLOCK_SIZE 32
 
-3. **Discretionary Access Control (DAC)**
-   - Traditional Unix permissions (user, group, others)
-   - Controlled by file owners
+typedef struct {
+    char memory[POOL_SIZE];
+    int used[POOL_SIZE / BLOCK_SIZE];
+} MemoryPool;
 
-4. **Security Modules**
-   - SELinux (Security-Enhanced Linux)
-   - AppArmor
-   - Smack (Simplified Mandatory Access Control Kernel)
-   - TOMOYO
+MemoryPool* create_pool() {
+    MemoryPool* pool = malloc(sizeof(MemoryPool));
+    memset(pool->used, 0, sizeof(pool->used));
+    return pool;
+}
 
-### SELinux (Security-Enhanced Linux)
+void* pool_alloc(MemoryPool* pool) {
+    for (int i = 0; i < POOL_SIZE / BLOCK_SIZE; i++) {
+        if (!pool->used[i]) {
+            pool->used[i] = 1;
+            return &pool->memory[i * BLOCK_SIZE];
+        }
+    }
+    return NULL;  // Out of memory
+}
 
-1. **Features**
-   - Fine-grained access control
-   - Policy-based security
-   - Type enforcement and role-based access control
+void pool_free(MemoryPool* pool, void* ptr) {
+    long offset = (char*)ptr - pool->memory;
+    if (offset >= 0 && offset < POOL_SIZE) {
+        pool->used[offset / BLOCK_SIZE] = 0;
+    }
+}
 
-2. **Modes**
-   - Enforcing: Enforces the policy, denying access and logging actions
-   - Permissive: Logs policy violations without enforcing
-   - Disabled: SELinux is turned off
+void destroy_pool(MemoryPool* pool) {
+    free(pool);
+}
 
-3. **Policy Types**
-   - Targeted: Default policy that confines specific services
-   - MLS (Multi-Level Security): For systems with varying security clearances
+int main() {
+    MemoryPool* pool = create_pool();
 
-### AppArmor
+    char* str1 = pool_alloc(pool);
+    char* str2 = pool_alloc(pool);
 
-1. **Features**
-   - Path-based access control
-   - Easier to configure than SELinux
-   - Profile-based security model
+    strcpy(str1, "Hello");
+    strcpy(str2, "World");
 
-2. **Modes**
-   - Enforce: Enforces the defined policy
-   - Complain: Logs policy violations without enforcing
+    printf("%s %s\n", str1, str2);
 
-3. **Profiles**
-   - Define what resources a program can access
-   - Can be in enforce or complain mode individually
+    pool_free(pool, str1);
+    pool_free(pool, str2);
 
-### Practical Example: AppArmor Profile
-
-Here's a simple AppArmor profile for a hypothetical application:
-
-```
-#include <tunables/global>
-
-/usr/bin/myapp {
-  #include <abstractions/base>
-  #include <abstractions/user-tmp>
-
-  /usr/bin/myapp mr,
-  /var/log/myapp.log w,
-  /etc/myapp.conf r,
-  network tcp,
+    destroy_pool(pool);
+    return 0;
 }
 ```
 
-This profile allows the application to:
-- Read and execute itself
-- Write to its log file
-- Read its configuration file
-- Use TCP networking
+### Memory Mapping
 
-### Gotchas and Best Practices
+Key Concepts:
+- Using mmap() for file and anonymous mappings
+- Shared memory between processes
 
-1. **Performance Impact**: Security modules can impact system performance; tune appropriately.
-2. **Learning Curve**: LSMs like SELinux have a steep learning curve; invest time in training.
-3. **Regular Audits**: Regularly audit and update security policies.
-4. **Testing**: Thoroughly test applications with security modules enabled.
-5. **Documentation**: Maintain clear documentation of security policies and configurations.
+Example: Using mmap() for file I/O
 
-### Interview Questions
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
-1. Q: What is the main difference between SELinux and AppArmor?
-   A: The main difference lies in their approach to access control:
-      - SELinux uses a label-based system where every process, file, and system object has a security context. It provides fine-grained control based on these contexts.
-      - AppArmor uses a path-based approach, where access rules are defined based on file paths. It's generally considered easier to configure but may be less granular than SELinux.
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <file>\n", argv[0]);
+        exit(1);
+    }
 
-2. Q: Explain the concept of MAC (Mandatory Access Control) and how it differs from DAC (Discretionary Access Control).
-   A:
-      - MAC is a type of access control where the system enforces the security policy, and users cannot override these restrictions. It's based on security labels or contexts assigned to subjects (processes) and objects (files, resources).
-      - DAC is the traditional Unix permission model where the owner of a resource controls its permissions. Users can modify permissions for resources they own.
-      MAC provides stronger security by preventing users from accidentally or intentionally weakening the security policy, while DAC offers more flexibility but can lead to security vulnerabilities if not managed carefully.
+    int fd = open(argv[1], O_RDONLY);
+    if (fd == -1) {
+        perror("open");
+        exit(1);
+    }
 
-3. Q: What are the main components of an SELinux policy?
-   A: The main components of an SELinux policy include:
-      - Types (or domains for processes)
-      - Roles
-      - Users
-      - Rules (allow, deny, auditallow, dontaudit)
-      - Contexts (user:role:type:level)
-      - Booleans (for runtime policy adjustments)
-      These components work together to define what actions are allowed or denied in the system based on the security context of processes and resources.
+    struct stat sb;
+    if (fstat(fd, &sb) == -1) {
+        perror("fstat");
+        exit(1);
+    }
 
-4. Q: How would you troubleshoot an application that's being blocked by AppArmor?
-   A: To troubleshoot an application blocked by AppArmor:
-      1. Check AppArmor logs in `/var/log/audit/audit.log` or `/var/log/syslog` for denied actions.
-      2. Use `aa-status` to check the status of AppArmor and the profile in question.
-      3. Consider switching the profile to complain mode using `aa-complain`.
-      4. Use `aa-logprof` to analyze the logs and suggest profile updates.
-      5. Manually edit the profile if necessary, adding required permissions.
-      6. Test the updated profile in complain mode before switching back to enforce mode.
+    char *addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (addr == MAP_FAILED) {
+        perror("mmap");
+        exit(1);
+    }
 
-5. Q: What is the purpose of the LSM framework in the Linux kernel?
-   A: The LSM (Linux Security Modules) framework serves several purposes:
-      - It provides a modular approach to implementing security models in the Linux kernel.
-      - It allows different security models to coexist without favoring any particular implementation.
-      - It offers a set of hooks at critical points in the kernel where security decisions need to be made.
-      - It enables the development and use of various security modules (like SELinux, AppArmor) without requiring extensive changes to the core kernel code.
-      - It allows systems to be configured with different security policies based on their specific requirements.
+    // Print file contents
+    write(STDOUT_FILENO, addr, sb.st_size);
 
-## 2. User Authentication and Authorization
+    if (munmap(addr, sb.st_size) == -1) {
+        perror("munmap");
+        exit(1);
+    }
 
-### Introduction
-User authentication and authorization are crucial aspects of Linux security, controlling who can access a system and what they can do once they're in.
-
-### Key Concepts
-
-1. **Authentication**
-   - Process of verifying a user's identity
-   - Typically involves username and password
-
-2. **Authorization**
-   - Determining what actions an authenticated user is allowed to perform
-   - Based on user permissions and group memberships
-
-3. **PAM (Pluggable Authentication Modules)**
-   - Framework for integrating multiple low-level authentication schemes
-   - Configurable authentication mechanism
-
-4. **Sudo**
-   - Allows users to run programs with the security privileges of another user
-
-5. **LDAP (Lightweight Directory Access Protocol)**
-   - Protocol for accessing and maintaining distributed directory information services
-
-### Authentication Mechanisms
-
-1. **Local Authentication**
-   - `/etc/passwd` and `/etc/shadow` files
-   - Local user accounts and passwords
-
-2. **LDAP Authentication**
-   - Centralized user management
-   - Often used in enterprise environments
-
-3. **Kerberos**
-   - Network authentication protocol
-   - Provides strong authentication for client/server applications
-
-4. **Two-Factor Authentication (2FA)**
-   - Combines something you know (password) with something you have (token)
-   - Enhances security by requiring two forms of identification
-
-### PAM (Pluggable Authentication Modules)
-
-1. **Configuration**
-   - Located in `/etc/pam.d/`
-   - Separate configuration files for different services
-
-2. **Module Types**
-   - auth: Authentication
-   - account: Account management
-   - password: Password management
-   - session: Session management
-
-3. **Common PAM Modules**
-   - pam_unix.so: Traditional Unix authentication
-   - pam_ldap.so: LDAP authentication
-   - pam_google_authenticator.so: Google Authenticator for 2FA
-
-### Practical Example: Configuring Sudo
-
-Here's an example of configuring sudo to allow a user to run specific commands:
-
-1. Run `visudo` to edit the sudo configuration
-2. Add the following line:
-
-```
-username ALL=(ALL) /usr/bin/apt-get, /sbin/reboot
+    close(fd);
+    return 0;
+}
 ```
 
-This allows 'username' to run `apt-get` and `reboot` commands with sudo privileges.
+## 2. Memory Debugging Techniques
 
-### User and Group Management
+### Using Valgrind
 
-1. **User Management Commands**
-   - `useradd`: Add a new user
-   - `usermod`: Modify user account
-   - `userdel`: Delete user account
+Key Concepts:
+- Detecting memory leaks
+- Finding use of uninitialized memory
+- Identifying invalid memory accesses
 
-2. **Group Management Commands**
-   - `groupadd`: Create a new group
-   - `groupmod`: Modify group information
-   - `groupdel`: Delete a group
+Example: Compiling and running a program with Valgrind
 
-3. **Password Management**
-   - `passwd`: Change user password
-   - `chage`: Change user password expiry information
-
-### Gotchas and Best Practices
-
-1. **Strong Passwords**: Enforce strong password policies.
-2. **Principle of Least Privilege**: Grant users only the permissions they need.
-3. **Regular Audits**: Regularly audit user accounts and permissions.
-4. **SSH Key Authentication**: Use SSH keys instead of passwords where possible.
-5. **Centralized Authentication**: Consider using LDAP or similar for centralized user management in larger environments.
-
-### Interview Questions
-
-1. Q: Explain the difference between authentication and authorization.
-   A:
-      - Authentication is the process of verifying the identity of a user or system. It answers the question "Who are you?" This typically involves providing credentials like a username and password.
-      - Authorization is the process of determining what actions an authenticated user is allowed to perform. It answers the question "What are you allowed to do?" This is based on the user's permissions, roles, or group memberships.
-
-2. Q: What is PAM and how does it enhance system security?
-   A: PAM (Pluggable Authentication Modules) is a flexible mechanism for authenticating users in Linux. It enhances security by:
-      - Allowing different authentication methods to be used without changing application code
-      - Providing a way to stack multiple authentication mechanisms
-      - Enabling centralized configuration of authentication policies
-      - Supporting additional checks like time-based access restrictions or resource limits
-      - Allowing for easy integration of new authentication technologies
-
-3. Q: How would you set up two-factor authentication (2FA) for SSH logins?
-   A: To set up 2FA for SSH logins:
-      1. Install Google Authenticator PAM module: `sudo apt-get install libpam-google-authenticator`
-      2. Run `google-authenticator` as the user to generate a secret key and QR code
-      3. Edit `/etc/pam.d/sshd` to include the line: `auth required pam_google_authenticator.so`
-      4. Edit `/etc/ssh/sshd_config` to set `ChallengeResponseAuthentication yes`
-      5. Restart the SSH service: `sudo systemctl restart sshd`
-      Now, users will need both their password and a time-based code from their authenticator app to log in.
-
-4. Q: What is the purpose of the `/etc/shadow` file and how does it improve security compared to storing passwords in `/etc/passwd`?
-   A: The `/etc/shadow` file stores encrypted user passwords and related information. It improves security by:
-      - Restricting access to password hashes (only readable by root)
-      - Storing additional password-related information (e.g., expiration date, last change date)
-      - Allowing for the use of more secure hashing algorithms
-      - Separating password information from other user account details
-      This separation prevents non-privileged users from accessing password hashes, making it more difficult for attackers to attempt offline password cracking.
-
-5. Q: Explain the concept of sudo and how it enhances system security.
-   A: sudo (Superuser Do) is a program that allows users to run commands with the security privileges of another user (by default, the superuser). It enhances security by:
-      - Allowing fine-grained control over who can run what commands with elevated privileges
-      - Providing an audit trail of commands executed with elevated privileges
-      - Reducing the need for users to log in as root or know the root password
-      - Allowing temporary elevation of privileges without changing the user's environment
-      - Supporting time-limited authorization
-      sudo helps implement the principle of least privilege, where users only get the minimum privileges necessary to perform their tasks, reducing the risk of accidental or intentional system damage.
-
-This content covers the essentials of Linux Security Modules (LSM) and User Authentication and Authorization, providing both theoretical knowledge and practical examples. It should give a comprehensive understanding of these critical aspects of Linux security.
+```bash
+gcc -g program.c -o program
+valgrind --leak-check=full ./program
 ```
 
-This completes the content for Day 10, covering Security and Access Control in Linux in detail.
+### Static Analysis Tools
+
+Key Concepts:
+- Introduction to static analysis
+- Using tools like cppcheck and Clang Static Analyzer
+
+Example: Running cppcheck
+
+```bash
+cppcheck --enable=all program.c
+```
+
+### Address Sanitizer (ASan)
+
+Key Concepts:
+- Detecting memory errors at runtime
+- Compiling with ASan support
+
+Example: Compiling and running a program with ASan
+
+```bash
+gcc -fsanitize=address -g program.c -o program
+./program
+```
+
+## 3. Advanced Debugging Techniques
+
+### GDB Advanced Features
+
+Key Concepts:
+- Setting conditional breakpoints
+- Using watchpoints
+- Examining core dumps
+
+Example: GDB commands for advanced debugging
+
+```gdb
+# Set a conditional breakpoint
+break function_name if condition
+
+# Set a watchpoint
+watch variable_name
+
+# Examine a core dump
+gdb program core
+
+# Print backtrace with local variables
+bt full
+```
+
+### Debugging Multithreaded Programs
+
+Key Concepts:
+- Thread-specific breakpoints
+- Examining thread states
+- Detecting deadlocks
+
+Example: GDB commands for debugging threads
+
+```gdb
+# List all threads
+info threads
+
+# Switch to a specific thread
+thread thread_number
+
+# Set a breakpoint for a specific thread
+break file.c:line_number thread thread_number
+
+# Continue execution of all threads
+set scheduler-locking off
+```
+
+### Remote Debugging
+
+Key Concepts:
+- Setting up a GDB server
+- Connecting to a remote debugging session
+
+Example: Setting up remote debugging
+
+```bash
+# On the target machine
+gdbserver :1234 ./program
+
+# On the development machine
+gdb
+(gdb) target remote targethost:1234
+```
+
+## 4. Performance Profiling
+
+### Using gprof
+
+Key Concepts:
+- Compiling with profiling support
+- Generating and interpreting profiling data
+
+Example: Using gprof
+
+```bash
+gcc -pg program.c -o program
+./program
+gprof program gmon.out > analysis.txt
+```
+
+### Perf Tool
+
+Key Concepts:
+- Sampling-based profiling
+- Analyzing system performance
+
+Example: Using perf
+
+```bash
+perf record ./program
+perf report
+```
+
+## 5. Best Practices and Considerations
+
+- Writing testable code
+- Implementing proper error handling and logging
+- Continuous integration and automated testing
+
+## Practice Exercises
+
+1. Implement a custom memory allocator with different allocation strategies (e.g., first-fit, best-fit).
+
+2. Create a program with deliberate memory errors and use Valgrind to detect and fix them.
+
+3. Write a multithreaded program and use GDB to debug race conditions.
+
+4. Profile a computationally intensive program using gprof and optimize it based on the results.
+
+## Important Tools and Utilities
+
+- strace: Trace system calls and signals
+- ltrace: Library call tracer
+- objdump: Display information from object files
+
+## Additional Resources
+
+1. "Debugging with GDB" (Free Software Foundation)
+2. "Valgrind User Manual"
+3. "Linux Debugging and Performance Tuning" by Steve Best
+4. "Advanced Linux Programming" by Mark Mitchell, Jeffrey Oldham, and Alex Samuel

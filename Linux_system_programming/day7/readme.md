@@ -1,221 +1,368 @@
+# Day 7: Inter-Process Communication (IPC) and System V IPC
 
-# Day 7: Memory Management and Virtual Memory
+## 1. Introduction to IPC
 
-## 1. Memory Management in Linux
+### Overview of IPC Mechanisms
 
-### Introduction
-Memory management is a critical component of the Linux kernel, responsible for allocating and deallocating memory resources to processes and the kernel itself. Understanding how Linux manages memory is crucial for both system administrators and developers working on performance-critical applications.
+Key Concepts:
+- Importance of IPC in system programming
+- Different IPC mechanisms available in Linux
+- Choosing the right IPC method for specific use cases
 
-### Key Concepts
+### Comparison of IPC Methods
 
-1. **Physical vs. Virtual Memory**
-   - Physical memory: Actual RAM in the system
-   - Virtual memory: Abstraction that provides each process with its own address space
+- Pipes and FIFOs
+- System V IPC (Message Queues, Semaphores, Shared Memory)
+- POSIX IPC
+- Sockets
+- Signals (as a basic form of IPC)
 
-2. **Page Tables**
-   - Data structures that map virtual addresses to physical addresses
-   - Multi-level page tables for efficiency
+## 2. Pipes and FIFOs
 
-3. **Memory Zones**
-   - ZONE_DMA, ZONE_NORMAL, ZONE_HIGHMEM
-   - Used to manage different types of memory
+### Anonymous Pipes
 
-4. **Slab Allocator**
-   - Efficient allocation of kernel objects
-   - Reduces fragmentation and improves performance
+Key Concepts:
+- Creating and using pipes
+- Parent-child communication using pipes
 
-5. **OOM Killer**
-   - Out-of-Memory Killer
-   - Terminates processes when system runs out of memory
-
-### Memory Allocation in User Space
-
-1. **Heap Allocation**
-   - `malloc()`, `free()`, `realloc()`
-   - Managed by the C library (e.g., glibc)
-
-2. **Stack Allocation**
-   - Automatic allocation for local variables
-   - Managed by the compiler
-
-3. **mmap()**
-   - Allows direct mapping of files or anonymous memory
-
-### Kernel Space Memory Allocation
-
-1. **kmalloc()**
-   - Allocates physically contiguous memory
-   - Suitable for small allocations
-
-2. **vmalloc()**
-   - Allocates virtually contiguous memory
-   - Can allocate larger chunks but with higher overhead
-
-3. **slab allocator functions**
-   - `kmem_cache_alloc()`, `kmem_cache_free()`
-   - Efficient for frequently used object types
-
-### Practical Example: Analyzing System Memory
-
-Here's a simple shell script to display basic memory information:
-
-```bash
-#!/bin/bash
-
-echo "Total Memory:"
-free -h | grep Mem | awk '{print $2}'
-
-echo "Used Memory:"
-free -h | grep Mem | awk '{print $3}'
-
-echo "Free Memory:"
-free -h | grep Mem | awk '{print $4}'
-
-echo "Cached Memory:"
-free -h | grep Mem | awk '{print $6}'
-
-echo "Swap Usage:"
-free -h | grep Swap | awk '{print $3}'
-```
-
-### Gotchas and Best Practices
-
-1. **Memory Leaks**: Always free allocated memory in user space programs.
-2. **Fragmentation**: Be aware of memory fragmentation, especially in long-running processes.
-3. **Swapping**: Excessive swapping can severely impact system performance.
-4. **OOM Killer**: Configure OOM killer settings appropriately for critical systems.
-5. **Memory Overcommit**: Understand the implications of memory overcommit settings.
-
-### Interview Questions
-
-1. Q: What is the purpose of virtual memory in Linux?
-   A: Virtual memory provides an abstraction layer between the physical memory and processes. It allows each process to have its own address space, enables memory protection between processes, facilitates efficient use of physical memory through paging, and allows the system to use more memory than physically available through swapping.
-
-2. Q: Explain the difference between `kmalloc()` and `vmalloc()`.
-   A: `kmalloc()` allocates physically contiguous memory and is faster but limited in size. `vmalloc()` allocates virtually contiguous memory, which can be physically discontinuous. `vmalloc()` can allocate larger chunks but has higher overhead due to page table modifications.
-
-3. Q: What is the slab allocator, and why is it used?
-   A: The slab allocator is a memory management mechanism used for efficient allocation of kernel objects. It maintains caches of commonly-used objects, reducing fragmentation and improving performance by reusing memory and avoiding frequent allocations and deallocations.
-
-4. Q: How does the OOM killer decide which process to terminate?
-   A: The OOM killer uses a scoring system based on various factors including:
-      - Memory usage of the process
-      - CPU usage
-      - Process priority (nice value)
-      - Time the process has been running
-      - Whether the process is privileged or not
-   It generally tries to kill the process that will free up the most memory with the least impact on the system.
-
-5. Q: What is memory overcommit, and how can it be configured in Linux?
-   A: Memory overcommit is a feature where the kernel allows processes to allocate more memory than physically available, betting on the fact that not all allocated memory will be used simultaneously. It can be configured using the `/proc/sys/vm/overcommit_memory` sysctl:
-      - 0: Heuristic overcommit (default)
-      - 1: Always overcommit
-      - 2: Never overcommit
-   The overcommit ratio can be adjusted with `/proc/sys/vm/overcommit_ratio`.
-
-## 2. Virtual Memory and Paging
-
-### Introduction
-Virtual memory is a memory management technique that provides an abstraction of the storage resources available to a process. It allows processes to use more memory than physically available and provides memory protection between processes. Paging is the mechanism used to implement virtual memory.
-
-### Key Concepts
-
-1. **Page**
-   - Fixed-size block of memory (typically 4KB on x86 systems)
-   - Basic unit of memory management for virtual memory
-
-2. **Page Table**
-   - Data structure that maps virtual page numbers to physical frame numbers
-   - Multi-level page tables for efficiency (e.g., 4-level on x86-64)
-
-3. **Translation Lookaside Buffer (TLB)**
-   - Cache for page table entries
-   - Speeds up virtual-to-physical address translation
-
-4. **Page Fault**
-   - Occurs when a process accesses a page that is not currently in physical memory
-   - Handled by the kernel's page fault handler
-
-5. **Swapping**
-   - Process of moving pages between RAM and disk storage
-   - Allows system to use more memory than physically available
-
-### Page Replacement Algorithms
-
-1. **Least Recently Used (LRU)**
-   - Replaces the page that hasn't been used for the longest time
-2. **Clock Algorithm**
-   - Approximation of LRU, more efficient to implement
-3. **Not Recently Used (NRU)**
-   - Considers both reference and modify bits
-
-### Practical Example: Analyzing Page Faults
-
-Here's a simple C program that deliberately causes page faults:
+Example: Using a pipe for parent-child communication
 
 ```c
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/resource.h>
+#include <string.h>
 
-#define ARRAY_SIZE (1024 * 1024 * 100)  // 100 MB
+#define BUFFER_SIZE 256
 
 int main() {
-    struct rusage usage_start, usage_end;
-    int *large_array = malloc(ARRAY_SIZE * sizeof(int));
+    int pipefd[2];
+    pid_t pid;
+    char buffer[BUFFER_SIZE];
 
-    getrusage(RUSAGE_SELF, &usage_start);
-
-    // Access the array in a way that causes page faults
-    for (int i = 0; i < ARRAY_SIZE; i += 1024) {
-        large_array[i] = i;
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
     }
 
-    getrusage(RUSAGE_SELF, &usage_end);
+    pid = fork();
 
-    long page_faults = usage_end.ru_majflt - usage_start.ru_majflt;
-    printf("Major Page Faults: %ld\n", page_faults);
+    if (pid == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) {  // Child process
+        close(pipefd[1]);  // Close unused write end
 
-    free(large_array);
+        ssize_t num_read = read(pipefd[0], buffer, BUFFER_SIZE);
+        if (num_read > 0) {
+            printf("Child received: %s\n", buffer);
+        }
+
+        close(pipefd[0]);
+        exit(EXIT_SUCCESS);
+    } else {  // Parent process
+        close(pipefd[0]);  // Close unused read end
+
+        const char *message = "Hello from parent!";
+        write(pipefd[1], message, strlen(message) + 1);
+
+        close(pipefd[1]);
+        wait(NULL);  // Wait for child to finish
+        exit(EXIT_SUCCESS);
+    }
+
     return 0;
 }
 ```
 
-### Gotchas and Best Practices
+### Named Pipes (FIFOs)
 
-1. **Page Size**: Be aware of the system's page size when optimizing memory access patterns.
-2. **Huge Pages**: Consider using huge pages for large memory allocations to reduce TLB misses.
-3. **Memory Access Patterns**: Design algorithms with cache-friendly memory access patterns.
-4. **Swappiness**: Adjust the swappiness parameter to control how aggressively the system swaps.
-5. **Memory Locking**: Use `mlock()` judiciously to prevent critical pages from being swapped out.
+Key Concepts:
+- Creating and using FIFOs
+- Communication between unrelated processes
 
-### Interview Questions
+Example: Creating and using a FIFO
 
-1. Q: What is the purpose of the Translation Lookaside Buffer (TLB)?
-   A: The TLB is a cache that stores recent virtual-to-physical address translations. It significantly speeds up memory access by reducing the number of times the CPU needs to walk the page table hierarchy for address translation.
+```c
+// writer.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <string.h>
 
-2. Q: Explain the difference between a major and minor page fault.
-   A: A minor page fault occurs when the required page is in memory but not mapped into the process's page table. A major page fault occurs when the required page is not in memory and needs to be loaded from disk. Major page faults are more expensive in terms of performance.
+#define FIFO_NAME "/tmp/myfifo"
 
-3. Q: How does the Linux kernel handle a page fault?
-   A: When a page fault occurs:
-      1. The CPU generates an exception and transfers control to the kernel.
-      2. The kernel identifies the type of fault and the faulting address.
-      3. If it's a valid access, the kernel allocates a physical frame if necessary.
-      4. The kernel updates the page table to map the virtual page to the physical frame.
-      5. If the page was swapped out, it's read back into memory.
-      6. The process is resumed at the instruction that caused the fault.
+int main() {
+    mkfifo(FIFO_NAME, 0666);
 
-4. Q: What is thrashing, and how can it be mitigated?
-   A: Thrashing occurs when a system spends more time paging data in and out of memory than executing actual processes. It can be mitigated by:
-      - Adding more physical memory
-      - Reducing the number of running processes
-      - Adjusting the swappiness parameter
-      - Optimizing application memory usage
+    int fd = open(FIFO_NAME, O_WRONLY);
+    if (fd == -1) {
+        perror("open");
+        exit(EXIT_FAILURE);
+    }
 
-5. Q: Explain the concept of demand paging.
-   A: Demand paging is a method of virtual memory management where pages are only brought into physical memory when they are actually needed (demanded) by a process. This allows programs to start quickly and use memory efficiently, as only the parts of the program that are actively used need to be in memory.
+    const char *message = "Hello through FIFO!";
+    write(fd, message, strlen(message) + 1);
 
-This content covers the essentials of Memory Management and Virtual Memory in Linux, providing both theoretical knowledge and practical examples. It should give a comprehensive understanding of these critical aspects of operating system design and implementation.
+    close(fd);
+    return 0;
+}
+
+// reader.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#define FIFO_NAME "/tmp/myfifo"
+#define BUFFER_SIZE 256
+
+int main() {
+    char buffer[BUFFER_SIZE];
+
+    int fd = open(FIFO_NAME, O_RDONLY);
+    if (fd == -1) {
+        perror("open");
+        exit(EXIT_FAILURE);
+    }
+
+    ssize_t num_read = read(fd, buffer, BUFFER_SIZE);
+    if (num_read > 0) {
+        printf("Received: %s\n", buffer);
+    }
+
+    close(fd);
+    unlink(FIFO_NAME);
+    return 0;
+}
 ```
+
+## 3. System V IPC
+
+### Message Queues
+
+Key Concepts:
+- Creating and accessing message queues
+- Sending and receiving messages
+
+Example: Using System V message queues
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+
+#define MAX_TEXT 512
+
+struct msg_buffer {
+    long msg_type;
+    char msg_text[MAX_TEXT];
+};
+
+int main() {
+    key_t key;
+    int msgid;
+    struct msg_buffer message;
+
+    // Generate a key
+    key = ftok("progfile", 65);
+
+    // Create a message queue
+    msgid = msgget(key, 0666 | IPC_CREAT);
+
+    // Sending a message
+    message.msg_type = 1;
+    strcpy(message.msg_text, "Hello from message queue!");
+    msgsnd(msgid, &message, sizeof(message), 0);
+
+    // Receiving a message
+    msgrcv(msgid, &message, sizeof(message), 1, 0);
+    printf("Received: %s\n", message.msg_text);
+
+    // Destroy the message queue
+    msgctl(msgid, IPC_RMID, NULL);
+
+    return 0;
+}
+```
+
+### Semaphores
+
+Key Concepts:
+- Creating and initializing semaphores
+- Using semaphores for synchronization
+
+Example: Using System V semaphores
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+
+#define KEY 1234
+
+union semun {
+    int val;
+    struct semid_ds *buf;
+    unsigned short *array;
+};
+
+int main() {
+    int semid;
+    struct sembuf sb = {0, -1, 0};  // semaphore operation
+    union semun arg;
+
+    // Create the semaphore
+    semid = semget(KEY, 1, 0666 | IPC_CREAT);
+
+    // Initialize the semaphore
+    arg.val = 1;
+    if (semctl(semid, 0, SETVAL, arg) == -1) {
+        perror("semctl");
+        exit(1);
+    }
+
+    printf("Semaphore created and initialized\n");
+
+    // Use the semaphore
+    printf("Trying to acquire the semaphore...\n");
+    if (semop(semid, &sb, 1) == -1) {
+        perror("semop");
+        exit(1);
+    }
+
+    printf("Semaphore acquired. Critical section starts.\n");
+    sleep(5);  // Simulate some work
+    printf("Critical section ends.\n");
+
+    // Release the semaphore
+    sb.sem_op = 1;  // Releasing the semaphore
+    if (semop(semid, &sb, 1) == -1) {
+        perror("semop");
+        exit(1);
+    }
+
+    printf("Semaphore released\n");
+
+    // Remove the semaphore
+    if (semctl(semid, 0, IPC_RMID, arg) == -1) {
+        perror("semctl");
+        exit(1);
+    }
+
+    return 0;
+}
+```
+
+### Shared Memory
+
+Key Concepts:
+- Creating and attaching shared memory segments
+- Synchronizing access to shared memory
+
+Example: Using System V shared memory
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+#define SHM_SIZE 1024
+
+int main() {
+    key_t key;
+    int shmid;
+    char *data;
+
+    // Generate a key
+    key = ftok("shmfile", 65);
+
+    // Create the shared memory segment
+    shmid = shmget(key, SHM_SIZE, 0666 | IPC_CREAT);
+    if (shmid == -1) {
+        perror("shmget");
+        exit(1);
+    }
+
+    // Attach the shared memory segment
+    data = shmat(shmid, (void *)0, 0);
+    if (data == (char *)(-1)) {
+        perror("shmat");
+        exit(1);
+    }
+
+    // Write to shared memory
+    strcpy(data, "Hello, shared memory!");
+
+    printf("Written to shared memory: %s\n", data);
+
+    // Detach from shared memory
+    shmdt(data);
+
+    // Reattach to read
+    data = shmat(shmid, (void *)0, 0);
+    printf("Read from shared memory: %s\n", data);
+
+    // Detach from shared memory
+    shmdt(data);
+
+    // Delete the shared memory segment
+    shmctl(shmid, IPC_RMID, NULL);
+
+    return 0;
+}
+```
+
+## 4. POSIX IPC (Overview)
+
+- POSIX Message Queues
+- POSIX Semaphores
+- POSIX Shared Memory
+
+## 5. Comparison of System V IPC and POSIX IPC
+
+- Advantages and disadvantages of each
+- When to use System V IPC vs POSIX IPC
+
+## 6. Best Practices and Considerations
+
+- Proper cleanup and resource management
+- Avoiding deadlocks and race conditions
+- Security considerations in IPC
+
+## Practice Exercises
+
+1. Implement a simple producer-consumer problem using pipes.
+
+2. Create a chat application using System V message queues.
+
+3. Develop a multi-process application that uses semaphores for synchronization and shared memory for data sharing.
+
+4. Implement a simple distributed computing system using a combination of IPC mechanisms.
+
+## Important Tools and Utilities
+
+- ipcs: Provide information on IPC facilities
+- ipcrm: Remove IPC facilities
+- strace: Trace system calls related to IPC
+
+## Additional Resources
+
+1. "The Linux Programming Interface" by Michael Kerrisk (chapters on IPC)
+2. "Advanced Programming in the UNIX Environment" by W. Richard Stevens and Stephen A. Rago
+3. Linux man pages: man 7 svipc, man 7 mq_overview, man 7 sem_overview, man 7 shm_overview
+4. "Unix Network Programming, Volume 2: Interprocess Communications" by W. Richard Stevens

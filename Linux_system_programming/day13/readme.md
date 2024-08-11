@@ -1,229 +1,360 @@
-# Day 13: Cloud Computing and Linux
+# Day 13: Signal Handling and Real-Time Programming
 
-## 1. Introduction to Cloud Computing
+## 1. Signal Handling
 
-### Definition
-Cloud computing is the delivery of computing services—including servers, storage, databases, networking, software, analytics, and intelligence—over the Internet ("the cloud") to offer faster innovation, flexible resources, and economies of scale.
+### Introduction to Signals
 
-### Key Concepts
+Key Concepts:
+- What are signals?
+- Common signals and their meanings
+- Signal delivery and handling
 
-1. **On-Demand Self-Service**
-   - Users can provision computing capabilities as needed without human interaction
+### Basic Signal Handling
 
-2. **Broad Network Access**
-   - Services are available over the network and accessed through standard mechanisms
+Key Concepts:
+- Using signal() function (deprecated)
+- Using sigaction() for robust signal handling
 
-3. **Resource Pooling**
-   - Provider's computing resources are pooled to serve multiple consumers
+Example: Basic signal handling with sigaction()
 
-4. **Rapid Elasticity**
-   - Capabilities can be elastically provisioned and released to scale rapidly
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
 
-5. **Measured Service**
-   - Cloud systems automatically control and optimize resource use
+void sigint_handler(int signo) {
+    printf("Caught SIGINT!\n");
+}
 
-### Service Models
+int main() {
+    struct sigaction sa;
+    sa.sa_handler = sigint_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
 
-1. **Infrastructure as a Service (IaaS)**
-   - Provides virtualized computing resources over the internet
-   - Examples: Amazon EC2, Google Compute Engine
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(1);
+    }
 
-2. **Platform as a Service (PaaS)**
-   - Provides a platform allowing customers to develop, run, and manage applications
-   - Examples: Heroku, Google App Engine
+    printf("Waiting for SIGINT...\n");
+    while(1) {
+        sleep(1);
+    }
 
-3. **Software as a Service (SaaS)**
-   - Delivers software applications over the internet
-   - Examples: Google Workspace, Salesforce
-
-### Deployment Models
-
-1. **Public Cloud**
-   - Services are rendered over a network that is open for public use
-
-2. **Private Cloud**
-   - Cloud infrastructure is provisioned for exclusive use by a single organization
-
-3. **Hybrid Cloud**
-   - Composition of two or more distinct cloud infrastructures (private, community, or public)
-
-4. **Multi-Cloud**
-   - Use of multiple cloud computing services in a single heterogeneous architecture
-
-### Benefits of Cloud Computing
-
-1. Cost Savings
-2. Scalability
-3. Flexibility
-4. Disaster Recovery
-5. Automatic Software Updates
-6. Increased Collaboration
-7. Work from Anywhere
-
-### Challenges and Considerations
-
-1. Security and Privacy
-2. Downtime
-3. Limited Control
-4. Vendor Lock-in
-5. Compliance Issues
-
-## 2. Linux in the Cloud
-
-### Linux's Role in Cloud Computing
-
-1. **Dominant Operating System**
-   - Most cloud servers run on Linux due to its stability, security, and flexibility
-
-2. **Open Source Nature**
-   - Allows for customization and optimization for cloud environments
-
-3. **Container Technologies**
-   - Linux containers (e.g., Docker) are fundamental to modern cloud architectures
-
-4. **Automation and Orchestration**
-   - Linux's command-line interface is ideal for scripting and automation in cloud environments
-
-### Key Linux Technologies in Cloud Computing
-
-1. **Virtualization**
-   - KVM (Kernel-based Virtual Machine)
-   - Xen
-
-2. **Containerization**
-   - Docker
-   - LXC (Linux Containers)
-
-3. **Orchestration**
-   - Kubernetes
-   - Docker Swarm
-
-4. **Configuration Management**
-   - Ansible
-   - Puppet
-   - Chef
-
-5. **Networking**
-   - Open vSwitch
-   - Network Namespaces
-
-### Linux Distributions for Cloud
-
-1. **Ubuntu Cloud**
-   - Optimized for cloud environments
-   - Regular releases and long-term support options
-
-2. **Red Hat Enterprise Linux (RHEL)**
-   - Enterprise-grade Linux distribution
-   - Strong support and security features
-
-3. **Amazon Linux**
-   - Optimized for AWS environments
-   - Compatible with Amazon EC2
-
-4. **CoreOS (now part of Red Hat)**
-   - Designed for containerized applications
-   - Automated updates and minimal footprint
-
-### Best Practices for Linux in Cloud
-
-1. **Security**
-   - Use strong authentication (e.g., SSH keys)
-   - Implement proper firewall rules
-   - Keep systems updated
-
-2. **Monitoring**
-   - Implement comprehensive monitoring solutions
-   - Use cloud-native monitoring tools
-
-3. **Automation**
-   - Leverage Infrastructure as Code (IaC)
-   - Use configuration management tools
-
-4. **Optimization**
-   - Right-size instances
-   - Use auto-scaling groups
-
-5. **Backup and Disaster Recovery**
-   - Implement regular backups
-   - Test disaster recovery plans
-
-### Practical Example: Deploying a Linux VM in the Cloud
-
-Here's an example using the AWS CLI to launch an EC2 instance:
-
-```bash
-aws ec2 run-instances \
-    --image-id ami-xxxxxxxx \
-    --count 1 \
-    --instance-type t2.micro \
-    --key-name MyKeyPair \
-    --security-group-ids sg-xxxxxxxx \
-    --subnet-id subnet-xxxxxxxx
+    return 0;
+}
 ```
 
-### Interview Questions
+### Advanced Signal Handling
 
-1. Q: What are the main advantages of using Linux in cloud environments?
-   A: The main advantages include:
-      - Cost-effectiveness (open-source, no licensing fees)
-      - Stability and reliability
-      - Flexibility and customization options
-      - Strong security features
-      - Excellent support for containerization and virtualization
-      - Rich ecosystem of tools and applications
-      - Scalability and performance optimizations
-      - Command-line interface ideal for automation and scripting
+Key Concepts:
+- Blocking and unblocking signals
+- Handling multiple signals
+- Reentrant functions and async-signal-safe functions
 
-2. Q: Explain the concept of "Infrastructure as Code" and how it relates to Linux in the cloud.
-   A: Infrastructure as Code (IaC) is the practice of managing and provisioning computing infrastructure through machine-readable definition files, rather than physical hardware configuration or interactive configuration tools. In the context of Linux in the cloud:
-      - It allows for consistent, repeatable deployments
-      - Tools like Terraform, CloudFormation, or Ansible can be used to define infrastructure
-      - Linux's scripting capabilities make it ideal for implementing IaC
-      - Version control can be applied to infrastructure definitions
-      - It enables rapid deployment and scaling of cloud resources
-      - Facilitates DevOps practices and continuous integration/deployment pipelines
+Example: Blocking signals and using sigprocmask()
 
-3. Q: How does Linux containerization technology contribute to cloud computing?
-   A: Linux containerization, particularly Docker, has significantly impacted cloud computing:
-      - Provides a consistent environment across development, testing, and production
-      - Enables microservices architecture
-      - Improves resource utilization compared to traditional VMs
-      - Facilitates rapid deployment and scaling of applications
-      - Supports DevOps practices and continuous delivery
-      - Allows for better isolation of applications
-      - Enhances portability across different cloud providers
-      - Integrates well with orchestration tools like Kubernetes for managing large-scale deployments
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
 
-4. Q: What are some key considerations when securing a Linux instance in the cloud?
-   A: Key considerations include:
-      - Use strong, key-based SSH authentication and disable password login
-      - Implement proper firewall rules (e.g., security groups in AWS)
-      - Keep the system and all packages up to date
-      - Use the principle of least privilege for user accounts and services
-      - Implement intrusion detection and prevention systems
-      - Enable and monitor logging
-      - Use encryption for data at rest and in transit
-      - Regularly audit and assess the security posture
-      - Implement network segmentation
-      - Use cloud provider's security features (e.g., AWS IAM)
-      - Consider using additional security tools like SELinux or AppArmor
+void sigint_handler(int signo) {
+    printf("Caught SIGINT!\n");
+}
 
-5. Q: How would you approach monitoring and logging for Linux systems in a cloud environment?
-   A: Approach to monitoring and logging:
-      - Utilize cloud provider's native monitoring tools (e.g., AWS CloudWatch)
-      - Implement a centralized logging solution (e.g., ELK stack)
-      - Use agent-based monitoring tools on each instance (e.g., Prometheus Node Exporter)
-      - Set up alerting for critical metrics and log patterns
-      - Monitor system resources (CPU, memory, disk, network)
-      - Track application-specific metrics
-      - Implement log rotation to manage storage
-      - Use log analysis tools to detect anomalies and security issues
-      - Ensure proper time synchronization across all systems
-      - Consider using a cloud-based log management service for easier scaling
-      - Implement automated responses to common issues where possible
+int main() {
+    struct sigaction sa;
+    sigset_t mask, oldmask;
 
-These questions and answers cover a range of topics related to Linux in cloud computing, from general concepts to specific technical considerations and best practices.
+    sa.sa_handler = sigint_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(1);
+    }
+
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+
+    if (sigprocmask(SIG_BLOCK, &mask, &oldmask) == -1) {
+        perror("sigprocmask");
+        exit(1);
+    }
+
+    printf("SIGINT is now blocked. Sleeping for 5 seconds...\n");
+    sleep(5);
+
+    printf("Unblocking SIGINT...\n");
+    if (sigprocmask(SIG_SETMASK, &oldmask, NULL) == -1) {
+        perror("sigprocmask");
+        exit(1);
+    }
+
+    printf("SIGINT unblocked. Waiting for signals...\n");
+    while(1) {
+        sleep(1);
+    }
+
+    return 0;
+}
 ```
 
-This content for Day 13 provides a comprehensive overview of cloud computing concepts and the role of Linux in cloud environments, including practical examples and interview questions.
+### Signal Sets and Masks
+
+Key Concepts:
+- Creating and manipulating signal sets
+- Process signal masks
+
+### Sending Signals
+
+Key Concepts:
+- Using kill() and raise()
+- Sending signals between processes
+
+Example: Sending a signal to another process
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <PID>\n", argv[0]);
+        exit(1);
+    }
+
+    pid_t pid = atoi(argv[1]);
+
+    if (kill(pid, SIGINT) == -1) {
+        perror("kill");
+        exit(1);
+    }
+
+    printf("Sent SIGINT to process %d\n", pid);
+
+    return 0;
+}
+```
+
+## 2. Real-Time Programming
+
+### Introduction to Real-Time Systems
+
+Key Concepts:
+- Characteristics of real-time systems
+- Hard vs. soft real-time systems
+- Real-time requirements in Linux
+
+### Real-Time Scheduling
+
+Key Concepts:
+- SCHED_FIFO and SCHED_RR scheduling policies
+- Setting and getting scheduling parameters
+
+Example: Setting real-time scheduling policy
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sched.h>
+
+int main() {
+    struct sched_param param;
+    int max_priority;
+
+    max_priority = sched_get_priority_max(SCHED_FIFO);
+    if (max_priority == -1) {
+        perror("sched_get_priority_max");
+        exit(1);
+    }
+
+    param.sched_priority = max_priority;
+
+    if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
+        perror("sched_setscheduler");
+        exit(1);
+    }
+
+    printf("Set to SCHED_FIFO with maximum priority\n");
+
+    // Your real-time task here
+    sleep(10);
+
+    return 0;
+}
+```
+
+### Real-Time Signals
+
+Key Concepts:
+- Real-time signals vs. standard signals
+- Using real-time signals for inter-process communication
+
+Example: Using real-time signals
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+
+void rt_sighandler(int signo, siginfo_t *info, void *context) {
+    printf("Received real-time signal %d\n", signo - SIGRTMIN);
+    printf("Value passed: %d\n", info->si_value.sival_int);
+}
+
+int main() {
+    struct sigaction sa;
+
+    sa.sa_sigaction = rt_sighandler;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+
+    if (sigaction(SIGRTMIN, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(1);
+    }
+
+    // Send a real-time signal to self
+    union sigval value;
+    value.sival_int = 42;
+
+    if (sigqueue(getpid(), SIGRTMIN, value) == -1) {
+        perror("sigqueue");
+        exit(1);
+    }
+
+    sleep(1);  // Wait for signal to be delivered
+
+    return 0;
+}
+```
+
+### Timer and Clock Functions
+
+Key Concepts:
+- High-resolution timers
+- POSIX clocks
+- Timer creation and management
+
+Example: Using high-resolution timer
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <time.h>
+
+void timer_handler(int signo, siginfo_t *info, void *context) {
+    printf("Timer expired!\n");
+}
+
+int main() {
+    struct sigaction sa;
+    struct sigevent sev;
+    struct itimerspec its;
+    timer_t timerid;
+
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = timer_handler;
+    sigemptyset(&sa.sa_mask);
+
+    if (sigaction(SIGRTMIN, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(1);
+    }
+
+    sev.sigev_notify = SIGEV_SIGNAL;
+    sev.sigev_signo = SIGRTMIN;
+    sev.sigev_value.sival_ptr = &timerid;
+
+    if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
+        perror("timer_create");
+        exit(1);
+    }
+
+    its.it_value.tv_sec = 1;
+    its.it_value.tv_nsec = 0;
+    its.it_interval.tv_sec = 1;
+    its.it_interval.tv_nsec = 0;
+
+    if (timer_settime(timerid, 0, &its, NULL) == -1) {
+        perror("timer_settime");
+        exit(1);
+    }
+
+    while(1) {
+        sleep(1);
+    }
+
+    return 0;
+}
+```
+
+### Memory Locking
+
+Key Concepts:
+- Preventing memory from being paged out
+- Using mlockall() and mlock()
+
+Example: Locking memory for a real-time process
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/mman.h>
+
+int main() {
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) {
+        perror("mlockall");
+        exit(1);
+    }
+
+    printf("Memory locked. Running real-time task...\n");
+
+    // Your real-time task here
+    sleep(10);
+
+    if (munlockall() == -1) {
+        perror("munlockall");
+        exit(1);
+    }
+
+    return 0;
+}
+```
+
+## Practice Exercises
+
+1. Implement a simple shell that can handle job control using signals.
+
+2. Create a real-time program that responds to external events using real-time signals.
+
+3. Develop a periodic task scheduler using high-resolution timers.
+
+4. Write a program that demonstrates the use of different scheduling policies and priorities.
+
+## Important Tools and Utilities
+
+- chrt: Manipulate real-time attributes of a process
+- nice and renice: Run a program with modified scheduling priority
+- top: View and manage process priorities
+- stress-ng: Stress test a computer system in various selectable ways
+
+## Additional Resources
+
+1. "Linux System Programming" by Robert Love
+2. "Real-Time Linux Programming" by John Lombardo
+3. "The Linux Programming Interface" by Michael Kerrisk
+4. "Programming for the Real World: POSIX.4" by Bill O. Gallmeister

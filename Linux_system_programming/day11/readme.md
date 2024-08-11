@@ -1,343 +1,409 @@
 
-# Day 11: System Monitoring and Logging
-
-## 1. Linux System Monitoring Tools
-
-### Introduction
-System monitoring is crucial for maintaining the health and performance of Linux systems. Various tools are available to monitor different aspects of system performance, resource utilization, and processes.
-
-### Key Monitoring Areas
-
-1. **CPU Usage**
-2. **Memory Utilization**
-3. **Disk I/O**
-4. **Network Activity**
-5. **Process Management**
-
-### Essential Monitoring Tools
-
-1. **top / htop**
-   - Real-time view of system processes
-   - Shows CPU, memory, and process information
-
-   Example usage:
-   ```
-   top
-   htop
-   ```
-
-2. **vmstat**
-   - Reports virtual memory statistics
-   - Provides information on system processes, memory, paging, block I/O, traps, and CPU activity
-
-   Example usage:
-   ```
-   vmstat 5 10  # Report every 5 seconds, 10 times
-   ```
-
-3. **iostat**
-   - Reports CPU statistics and I/O statistics for devices and partitions
-
-   Example usage:
-   ```
-   iostat -x 5 3  # Extended report, every 5 seconds, 3 times
-   ```
-
-4. **netstat / ss**
-   - Network statistics
-   - Shows network connections, routing tables, interface statistics
-
-   Example usage:
-   ```
-   netstat -tuln  # TCP and UDP listening sockets
-   ss -s  # Socket statistics
-   ```
-
-5. **sar (System Activity Reporter)**
-   - Collects, reports, and saves system activity information
-
-   Example usage:
-   ```
-   sar -u 5 3  # CPU usage, every 5 seconds, 3 times
-   ```
-
-6. **dstat**
-   - Versatile tool for generating system resource statistics
-
-   Example usage:
-   ```
-   dstat -cdngy  # CPU, disk, network, page, system stats
-   ```
-
-### Advanced Monitoring Tools
-
-1. **Nagios**
-   - Comprehensive monitoring system for networks and infrastructure
-
-2. **Prometheus**
-   - Monitoring system and time series database
-
-3. **Grafana**
-   - Analytics and interactive visualization web application
-
-4. **Zabbix**
-   - Enterprise-class open source distributed monitoring solution
-
-### Practical Example: Simple System Monitoring Script
-
-Here's a bash script that provides a basic system overview:
-
-```bash
-#!/bin/bash
-
-echo "System Monitoring Report"
-echo "========================"
-
-echo -e "\nCPU Usage:"
-top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1"%"}'
-
-echo -e "\nMemory Usage:"
-free -m | awk 'NR==2{printf "Used: %s MB (%.2f%%)\n", $3,$3*100/$2 }'
-
-echo -e "\nDisk Usage:"
-df -h | awk '$NF=="/"{printf "Used: %d GB (%s)\n", $3,$5}'
-
-echo -e "\nTop 5 Processes by CPU usage:"
-ps aux --sort=-%cpu | head -n 6
-
-echo -e "\nCurrent Network Connections:"
-netstat -tuln | grep LISTEN
-```
-
-### Gotchas and Best Practices
-
-1. **Resource Impact**: Be aware that monitoring tools themselves consume resources.
-2. **Data Retention**: Plan for long-term storage and analysis of monitoring data.
-3. **Alerting**: Set up alerts for critical thresholds to proactively address issues.
-4. **Customization**: Tailor monitoring to your specific system and application needs.
-5. **Regular Review**: Periodically review and adjust monitoring strategies.
-
-### Interview Questions
-
-1. Q: What's the difference between `top` and `htop`?
-   A: Both `top` and `htop` are interactive process viewers, but `htop` offers several advantages:
-      - More colorful and intuitive interface
-      - Ability to scroll vertically and horizontally
-      - Mouse operation support
-      - Easier process killing and priority changing
-      - Better support for multi-core systems
-   `top` is typically pre-installed on most systems, while `htop` often needs to be installed separately.
-
-2. Q: How would you monitor disk I/O on a Linux system?
-   A: There are several ways to monitor disk I/O:
-      - `iostat`: Provides detailed I/O statistics for devices and partitions.
-      - `iotop`: Shows I/O usage by processes (similar to top for I/O).
-      - `dstat`: Offers a versatile view of various system resources, including disk I/O.
-      - `vmstat`: Gives a overview of system performance, including disk operations.
-      For example, you could use `iostat -x 5` to get extended disk statistics every 5 seconds.
-
-3. Q: Explain the purpose of the `sar` command and how it's typically used.
-   A: `sar` (System Activity Reporter) is a versatile tool for collecting, reporting, and saving system activity information. It's typically used for:
-      - Historical performance analysis (it can read data from log files)
-      - Real-time system monitoring
-      - Generating reports on CPU, memory, disk I/O, and network usage
-   `sar` is often configured to run periodically (e.g., via cron) to collect system statistics, which can then be analyzed later. For example, `sar -u 5 3` would report CPU usage every 5 seconds, 3 times.
-
-4. Q: How would you identify which process is using the most memory on a Linux system?
-   A: There are several ways to identify the process using the most memory:
-      1. Using `top` or `htop` and sorting by memory usage (press 'M' in top)
-      2. Using the `ps` command:
-         ```
-         ps aux --sort=-%mem | head
-         ```
-      3. Using `smem` for a more accurate representation of memory usage:
-         ```
-         smem -tk
-         ```
-      These methods will show you the processes consuming the most memory, allowing you to investigate further if necessary.
-
-5. Q: What are the key differences between Nagios and Prometheus for system monitoring?
-   A: Nagios and Prometheus are both popular monitoring systems, but they have different approaches:
-      - Architecture: Nagios uses a centralized model, while Prometheus uses a pull model and is more decentralized.
-      - Data Model: Nagios focuses on host/service checks, while Prometheus uses a multi-dimensional data model with time series.
-      - Alerting: Nagios has built-in alerting, while Prometheus uses a separate Alertmanager component.
-      - Visualization: Nagios has basic built-in visualizations, while Prometheus is often used with Grafana for advanced visualizations.
-      - Extensibility: Nagios relies heavily on plugins, while Prometheus has a more flexible data collection model with exporters.
-      - Scalability: Prometheus generally scales better for large, dynamic environments.
-   The choice between them often depends on specific requirements, existing infrastructure, and team expertise.
-
-## 2. Logging and Log Analysis
-
-### Introduction
-Logging is a critical aspect of system administration and security in Linux. Proper logging and log analysis help in troubleshooting, security auditing, and understanding system behavior.
-
-### Key Concepts
-
-1. **Syslog**
-   - Standard logging protocol for Linux systems
-   - Defines severity levels and facilities for messages
-
-2. **Journald**
-   - Part of systemd, stores logs in binary format
-   - Offers structured logging and improved querying capabilities
-
-3. **Log Rotation**
-   - Process of archiving old log files and creating new ones
-   - Prevents logs from consuming too much disk space
-
-4. **Log Analysis Tools**
-   - Tools for parsing, searching, and analyzing log files
-
-### Important Log Files
-
-1. `/var/log/syslog` or `/var/log/messages`: General system logs
-2. `/var/log/auth.log` or `/var/log/secure`: Authentication logs
-3. `/var/log/kern.log`: Kernel logs
-4. `/var/log/apache2/` or `/var/log/httpd/`: Web server logs
-5. `/var/log/mysql/`: MySQL database logs
-
-### Logging Daemons
-
-1. **rsyslog**
-   - Enhanced version of syslog
-   - Supports TCP, SSL/TLS, content-based filtering
-
-2. **syslog-ng**
-   - Next-generation syslog daemon
-   - Offers flexible configuration and filtering options
-
-### Log Analysis Tools
-
-1. **grep, awk, sed**
-   - Command-line tools for searching and manipulating log files
-
-2. **logwatch**
-   - Analyzes log files and emails summaries
-
-3. **ELK Stack (Elasticsearch, Logstash, Kibana)**
-   - Powerful stack for collecting, processing, and visualizing logs
-
-4. **Splunk**
-   - Enterprise-level log analysis and monitoring tool
-
-### Practical Example: Basic Log Analysis
-
-Here's a bash script to analyze authentication failures:
-
-```bash
-#!/bin/bash
-
-echo "Failed SSH Login Attempts:"
-grep "Failed password" /var/log/auth.log | awk '{print $1, $2, $3, $11}' | sort | uniq -c | sort -nr
-
-echo -e "\nSuccessful SSH Logins:"
-grep "Accepted password" /var/log/auth.log | awk '{print $1, $2, $3, $9}' | sort | uniq -c | sort -nr
-
-echo -e "\nTop 10 IP Addresses for Failed Logins:"
-grep "Failed password" /var/log/auth.log | awk '{print $11}' | sort | uniq -c | sort -nr | head -n 10
-```
-
-### Log Rotation with logrotate
-
-Example logrotate configuration (`/etc/logrotate.d/custom-app`):
-
-```
-/var/log/custom-app.log {
-    weekly
-    rotate 4
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 644 root root
+# Day 11: Network Programming
+
+## 1. Introduction to Network Programming
+
+### Overview of Networking Concepts
+
+Key Concepts:
+- OSI model and TCP/IP stack
+- IP addresses and ports
+- Sockets and socket types
+
+### Socket Programming Basics
+
+Key Concepts:
+- Socket creation and initialization
+- Connection-oriented vs. connectionless communication
+- Basic client-server model
+
+## 2. TCP Socket Programming
+
+### Creating a TCP Server
+
+Key Concepts:
+- Socket creation, binding, and listening
+- Accepting client connections
+- Handling multiple clients
+
+Example: Simple TCP server
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+int main() {
+    int server_fd, new_socket;
+    struct sockaddr_in address;
+    int opt = 1;
+    int addrlen = sizeof(address);
+    char buffer[BUFFER_SIZE] = {0};
+
+    // Creating socket file descriptor
+    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Forcefully attaching socket to the port 8080
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+        perror("setsockopt");
+        exit(EXIT_FAILURE);
+    }
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(PORT);
+
+    // Forcefully attaching socket to the port 8080
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+    if (listen(server_fd, 3) < 0) {
+        perror("listen");
+        exit(EXIT_FAILURE);
+    }
+    if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
+        perror("accept");
+        exit(EXIT_FAILURE);
+    }
+
+    read(new_socket, buffer, BUFFER_SIZE);
+    printf("Message from client: %s\n", buffer);
+    send(new_socket, "Hello from server", strlen("Hello from server"), 0);
+
+    close(new_socket);
+    close(server_fd);
+    return 0;
 }
 ```
 
-### Gotchas and Best Practices
+### Creating a TCP Client
 
-1. **Timestamp Consistency**: Ensure all systems use synchronized time (NTP).
-2. **Log Retention**: Define and implement a log retention policy.
-3. **Security**: Protect log files from unauthorized access and tampering.
-4. **Remote Logging**: Consider sending logs to a central log server for better security and analysis.
-5. **Regular Analysis**: Implement routine log analysis procedures.
+Key Concepts:
+- Connecting to a server
+- Sending and receiving data
 
-### Interview Questions
+Example: Simple TCP client
 
-1. Q: What is the difference between syslog and journald?
-   A:
-   - Syslog is the traditional logging system in Unix-like operating systems. It typically writes plain text log files to `/var/log/`.
-   - Journald is part of systemd and stores logs in a structured, binary format. It offers:
-     - Faster querying and filtering
-     - Index-based access
-     - Automatic log rotation
-     - Integration with systemd services
-   Journald can forward logs to syslog, allowing both systems to coexist. While syslog is more universally supported, journald offers more advanced features for log management and analysis.
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
-2. Q: How would you investigate failed login attempts on a Linux system?
-   A: To investigate failed login attempts:
-   1. Check the authentication log file (usually `/var/log/auth.log` or `/var/log/secure`).
-   2. Use commands like `grep` to filter for relevant entries:
-      ```
-      grep "Failed password" /var/log/auth.log
-      ```
-   3. Use `awk` to extract and format relevant information:
-      ```
-      grep "Failed password" /var/log/auth.log | awk '{print $1, $2, $3, $11}'
-      ```
-   4. Use `sort` and `uniq` to summarize attempts:
-      ```
-      grep "Failed password" /var/log/auth.log | awk '{print $11}' | sort | uniq -c | sort -nr
-      ```
-   5. Consider using tools like `fail2ban` to automatically block repeated failed attempts.
+#define PORT 8080
+#define BUFFER_SIZE 1024
 
-3. Q: Explain the concept of log rotation and why it's important.
-   A: Log rotation is the process of periodically archiving current log files and starting new ones. It's important because:
-   - It prevents log files from consuming too much disk space
-   - It makes log management and analysis easier by breaking logs into manageable chunks
-   - It allows for easy archiving and deletion of old logs
-   - It can improve system performance by keeping current log files smaller
-   Log rotation typically involves:
-   - Compressing old log files
-   - Creating new log files
-   - Optionally deleting very old logs
-   - Restarting or signaling logging services to use the new log files
-   Tools like `logrotate` in Linux automate this process based on size, time, or other criteria.
+int main() {
+    int sock = 0;
+    struct sockaddr_in serv_addr;
+    char buffer[BUFFER_SIZE] = {0};
 
-4. Q: What is the ELK stack and how is it used in log management?
-   A: The ELK stack consists of three main components:
-   - Elasticsearch: A distributed search and analytics engine
-   - Logstash: A server-side data processing pipeline that ingests data from multiple sources, transforms it, and sends it to a "stash" like Elasticsearch
-   - Kibana: A visualization layer that works on top of Elasticsearch
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        printf("\n Socket creation error \n");
+        return -1;
+    }
 
-   It's used in log management to:
-   - Collect logs from various sources (using Logstash or Beats)
-   - Store and index logs efficiently (in Elasticsearch)
-   - Search and analyze logs quickly
-   - Create visualizations and dashboards (using Kibana)
-   - Set up alerts based on log patterns
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(PORT);
 
-   The ELK stack allows for centralized logging, making it easier to correlate events across multiple systems and applications, and to perform complex analyses on large volumes of log data.
+    // Convert IPv4 and IPv6 addresses from text to binary form
+    if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+        printf("\nInvalid address/ Address not supported \n");
+        return -1;
+    }
 
-5. Q: How would you secure log files on a Linux system?
-   A: To secure log files on a Linux system:
-   1. Set appropriate permissions:
-      ```
-      chmod 640 /var/log/syslog
-      chown root:adm /var/log/syslog
-      ```
-   2. Use log rotation to archive and compress old logs
-   3. Implement remote logging to a secure, centralized log server
-   4. Use file integrity monitoring tools like AIDE to detect unauthorized changes
-   5. Enable auditd to monitor file access and changes
-   6. Encrypt sensitive log files
-   7. Implement SELinux or AppArmor policies to restrict access
-   8. Regularly review and analyze logs for suspicious activities
-   9. Use secure protocols (like TLS) when transmitting logs over the network
-   10. Implement a log retention policy and securely delete old logs
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        printf("\nConnection Failed \n");
+        return -1;
+    }
 
-   These measures help protect the integrity and confidentiality of log data, which is crucial for security auditing and incident response.
+    send(sock, "Hello from client", strlen("Hello from client"), 0);
+    printf("Message sent\n");
+    read(sock, buffer, BUFFER_SIZE);
+    printf("Message from server: %s\n", buffer);
 
-This content covers the essentials of System Monitoring and Logging in Linux, providing both theoretical knowledge and practical examples. It should give a comprehensive understanding of these critical aspects of Linux system administration.
+    close(sock);
+    return 0;
+}
 ```
 
-This completes the content for Day 11, covering System Monitoring and Logging in Linux in detail.
+## 3. UDP Socket Programming
+
+### Creating a UDP Server
+
+Key Concepts:
+- Differences between UDP and TCP
+- Handling connectionless communication
+
+Example: Simple UDP server
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+int main() {
+    int sockfd;
+    char buffer[BUFFER_SIZE];
+    struct sockaddr_in servaddr, cliaddr;
+
+    // Creating socket file descriptor
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&servaddr, 0, sizeof(servaddr));
+    memset(&cliaddr, 0, sizeof(cliaddr));
+
+    // Filling server information
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_port = htons(PORT);
+
+    // Bind the socket with the server address
+    if (bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    int len, n;
+    len = sizeof(cliaddr);
+
+    n = recvfrom(sockfd, (char *)buffer, BUFFER_SIZE, MSG_WAITALL,
+                 (struct sockaddr *)&cliaddr, &len);
+    buffer[n] = '\0';
+    printf("Client : %s\n", buffer);
+    sendto(sockfd, "Hello from server", strlen("Hello from server"),
+           MSG_CONFIRM, (const struct sockaddr *)&cliaddr, len);
+
+    close(sockfd);
+    return 0;
+}
+```
+
+### Creating a UDP Client
+
+Key Concepts:
+- Sending datagrams
+- Handling potential packet loss
+
+Example: Simple UDP client
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+int main() {
+    int sockfd;
+    char buffer[BUFFER_SIZE];
+    struct sockaddr_in servaddr;
+
+    // Creating socket file descriptor
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&servaddr, 0, sizeof(servaddr));
+
+    // Filling server information
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(PORT);
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+
+    int n, len;
+
+    sendto(sockfd, "Hello from client", strlen("Hello from client"),
+           MSG_CONFIRM, (const struct sockaddr *)&servaddr, sizeof(servaddr));
+    printf("Message sent.\n");
+
+    n = recvfrom(sockfd, (char *)buffer, BUFFER_SIZE, MSG_WAITALL,
+                 (struct sockaddr *)&servaddr, &len);
+    buffer[n] = '\0';
+    printf("Server : %s\n", buffer);
+
+    close(sockfd);
+    return 0;
+}
+```
+
+## 4. Advanced Network Programming Concepts
+
+### Non-blocking I/O and Select()
+
+Key Concepts:
+- Setting sockets to non-blocking mode
+- Using select() for I/O multiplexing
+
+Example: Using select() for multiple clients
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/select.h>
+
+#define PORT 8080
+#define MAX_CLIENTS 30
+#define BUFFER_SIZE 1024
+
+int main() {
+    int master_socket, addrlen, new_socket, client_socket[MAX_CLIENTS],
+        max_clients = MAX_CLIENTS, activity, i, valread, sd;
+    int max_sd;
+    struct sockaddr_in address;
+
+    char buffer[BUFFER_SIZE];
+
+    fd_set readfds;
+
+    for (i = 0; i < max_clients; i++) {
+        client_socket[i] = 0;
+    }
+
+    if ((master_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(PORT);
+
+    if (bind(master_socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(master_socket, 3) < 0) {
+        perror("listen");
+        exit(EXIT_FAILURE);
+    }
+
+    addrlen = sizeof(address);
+    puts("Waiting for connections ...");
+
+    while(1) {
+        FD_ZERO(&readfds);
+        FD_SET(master_socket, &readfds);
+        max_sd = master_socket;
+
+        for (i = 0; i < max_clients; i++) {
+            sd = client_socket[i];
+            if (sd > 0)
+                FD_SET(sd, &readfds);
+            if (sd > max_sd)
+                max_sd = sd;
+        }
+
+        activity = select(max_sd + 1, &readfds, NULL, NULL, NULL);
+
+        if ((activity < 0) && (errno != EINTR)) {
+            printf("select error");
+        }
+
+        if (FD_ISSET(master_socket, &readfds)) {
+            if ((new_socket = accept(master_socket, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
+                perror("accept");
+                exit(EXIT_FAILURE);
+            }
+
+            for (i = 0; i < max_clients; i++) {
+                if (client_socket[i] == 0) {
+                    client_socket[i] = new_socket;
+                    break;
+                }
+            }
+        }
+
+        for (i = 0; i < max_clients; i++) {
+            sd = client_socket[i];
+
+            if (FD_ISSET(sd, &readfds)) {
+                if ((valread = read(sd, buffer, BUFFER_SIZE)) == 0) {
+                    close(sd);
+                    client_socket[i] = 0;
+                } else {
+                    buffer[valread] = '\0';
+                    send(sd, buffer, strlen(buffer), 0);
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+```
+
+### Asynchronous I/O with epoll
+
+Key Concepts:
+- Introduction to epoll
+- Scalable I/O event notification mechanism
+
+### Network Protocol Implementation
+
+Key Concepts:
+- Implementing custom protocols
+- Handling protocol state machines
+
+## 5. Network Security Basics
+
+### SSL/TLS Integration
+
+Key Concepts:
+- Introduction to OpenSSL
+- Implementing secure sockets
+
+### Basic Network Security Practices
+
+Key Concepts:
+- Input validation
+- Handling sensitive data
+
+## Practice Exercises
+
+1. Implement a chat server that can handle multiple clients simultaneously.
+
+2. Create a simple HTTP server that can serve static files.
+
+3. Develop a UDP-based file transfer application with basic error checking and retransmission.
+
+4. Implement a simple network protocol for a specific application (e.g., a distributed key-value store).
+
+## Important Tools and Utilities
+
+- netstat: Network statistics
+- tcpdump: Packet analyzer
+- wireshark: Network protocol analyzer
+- nmap: Network exploration tool and security scanner
+
+## Additional Resources
+
+1. "UNIX Network Programming, Volume 1" by W. Richard Stevens
+2. "Beej's Guide to Network Programming" by Brian "Beej" Hall
+3. "TCP/IP Illustrated, Volume 1" by W. Richard Stevens
+4. "Linux Socket Programming by Example" by Warren Gay
